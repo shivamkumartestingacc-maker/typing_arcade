@@ -3,6 +3,8 @@
 A fast, addictive **typing game** that runs in the browser. Words come at you, the clock keeps ticking, and every keystroke counts. Race against the timer, chain combos, and see how high you can push your WPM before the arcade beats you.
 
 > **Status:** early setup — the project skeleton and this README are in place. Game source is being added next.
+>
+> The current `index.html` is a temporary **welcome page** ("Ready to type — grab your keyboard") used so there is something live to deploy. It will be replaced by the game itself.
 
 ---
 
