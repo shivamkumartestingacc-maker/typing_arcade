@@ -1,0 +1,1845 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Typing Arcade</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+</head>
+<body>
+<style>
+/* Hairline Keep — page chrome. The drawing itself takes its palette from the
+   hairline kernel (plate · hi · edge · mid · lo); these tokens mirror it. */
+:root{
+  color-scheme: light dark;
+  --plate:#ffffff; --hi:#232327; --edge:#a4a4ac; --mid:#c3c3c9; --lo:#e0e0e4;
+  --page:#f4f4f5; --muted:#6f6f78; --warn:#d6454b;
+  --ease:cubic-bezier(.32,.72,0,1);
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --plate:#08090a; --hi:#d0d6e0; --edge:#5b5d64; --mid:#3e3e44; --lo:#29292d;
+    --page:#0d0e10; --muted:#8a8c95; --warn:#ff6369;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --plate:#08090a; --hi:#d0d6e0; --edge:#5b5d64; --mid:#3e3e44; --lo:#29292d;
+  --page:#0d0e10; --muted:#8a8c95; --warn:#ff6369;
+}
+:root[data-theme="light"]{ color-scheme: light; }
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--page);color:var(--hi);font-family:var(--sans);-webkit-font-smoothing:antialiased;transition:background .26s var(--ease)}
+a{color:inherit}
+button{font-family:inherit;cursor:pointer;color:inherit}
+.mono{font-family:var(--mono)}
+.dim{opacity:.55}
+kbd{font-family:var(--mono);font-size:10px;padding:1px 5px;border:1px solid var(--edge);border-bottom-width:2px;border-radius:4px;background:var(--plate);color:var(--hi)}
+.cap{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+
+/* top bar */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;border-bottom:1px solid var(--lo);background:var(--plate);position:sticky;top:env(safe-area-inset-top,0px);z-index:30}
+.brand{display:flex;align-items:center;gap:8px;text-decoration:none;letter-spacing:.14em;min-width:0}
+.brand-mark{width:26px;height:26px;fill:none;stroke:var(--hi);stroke-width:1.3;stroke-linejoin:round;stroke-linecap:round}
+.brand-word{font-weight:700;font-size:13px}
+.brand-sep{color:var(--edge)}
+.brand-sub{font-size:11px;color:var(--muted);font-weight:600}
+.top-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.tool{font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:7px 11px;background:var(--plate);border:1px solid var(--edge);border-radius:999px;transition:border-color .16s var(--ease)}
+.tool:hover{border-color:var(--hi)}
+.tool:focus-visible,.cta:focus-visible,.build:focus-visible{outline:1.5px solid var(--hi);outline-offset:2px}
+.tool[disabled]{opacity:.35;cursor:default}
+.tool.off{opacity:.5}
+
+/* hud */
+.shell{max-width:1120px;margin:0 auto;padding-block:16px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.hud{display:grid;grid-template-columns:2fr repeat(6,1fr);gap:1px;background:var(--lo);border:1px solid var(--lo);border-radius:12px;overflow:hidden}
+.hud-cell{background:var(--plate);padding:9px 13px 10px;display:flex;flex-direction:column;gap:4px;justify-content:center;min-width:0}
+.num{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.num small{font-size:10px;color:var(--muted);font-weight:400}
+.sub{font-size:10px;color:var(--muted)}
+.sub.up{color:var(--hi)}
+.hp-row{display:flex;align-items:center;gap:10px}
+.hp-track{flex:1;height:8px;border:1px solid var(--edge);border-radius:999px;overflow:hidden;background:var(--plate)}
+.hp-fill{height:100%;width:100%;background:var(--hi);border-radius:999px;transition:width .3s var(--ease)}
+.hp-track.low .hp-fill{background:var(--warn)}
+#hpText{font-size:13px;min-width:3ch;text-align:right}
+.bump{animation:bump .3s var(--ease)}
+@keyframes bump{40%{transform:translateY(-2px)}}
+
+/* stage */
+.stage-wrap{margin-top:14px}
+.stage-head{display:flex;justify-content:space-between;padding:0 4px 6px}
+.field{position:relative;border:1px solid var(--lo);border-radius:14px 14px 0 0;overflow:hidden;background:var(--plate);container-type:inline-size}
+#board{aspect-ratio:960/430;width:100%}
+.field.shake #board{animation:shake .28s linear}
+@keyframes shake{20%{transform:translate(-3px,1px)}40%{transform:translate(3px,-1px)}60%{transform:translate(-2px,0)}80%{transform:translate(1px,1px)}}
+
+/* word labels over the drawing — names stay outside the figure */
+.labels{position:absolute;inset:0;pointer-events:none}
+.bubble{position:absolute;transform:translate(-50%,-100%);font-family:var(--mono);font-size:clamp(10px,1.32cqw,15px);line-height:1;padding:.32em .5em .36em;background:var(--plate);border:1px solid var(--lo);border-radius:7px;white-space:pre;color:var(--edge);letter-spacing:.02em;will-change:left,top}
+.bubble::after{content:"";position:absolute;left:50%;bottom:-5px;width:1px;height:5px;background:var(--lo)}
+.bubble .ok{color:var(--mid)}
+.bubble .bad{color:var(--warn);text-decoration:line-through}
+.bubble .cut{color:var(--lo);text-decoration:line-through}
+.bubble .sp{opacity:.6}
+.bubble.target{z-index:5;color:var(--hi);border-color:var(--hi);font-weight:600}
+.bubble.target::after{background:var(--hi)}
+.bubble.target .cur{border-bottom:1.5px solid var(--hi)}
+.bubble.dying{opacity:0;transition:opacity .25s}
+.bubble.line{border-style:dashed}
+.padtag{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:clamp(9px,1cqw,12px);color:var(--muted);letter-spacing:.06em;white-space:nowrap}
+.padtag kbd{font-size:inherit;padding:0 4px}
+.padtag.can kbd{border-color:var(--hi)}
+.padtag.can{color:var(--hi)}
+.float{position:absolute;transform:translate(-50%,-100%);font-family:var(--mono);font-size:clamp(9px,1.05cqw,12px);color:var(--hi);pointer-events:none;animation:float .8s var(--ease) forwards;white-space:nowrap}
+.float.bad{color:var(--warn)}
+@keyframes float{to{transform:translate(-50%,-260%);opacity:0}}
+
+.banner{position:absolute;left:50%;top:9%;transform:translateX(-50%);font-family:var(--mono);font-size:clamp(11px,1.5cqw,16px);letter-spacing:.2em;text-transform:uppercase;background:var(--plate);border:1px solid var(--hi);border-radius:999px;padding:.6em 1.2em;white-space:nowrap;z-index:8}
+.banner small{color:var(--muted);letter-spacing:.1em}
+
+/* overlays */
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--plate) 80%,transparent);backdrop-filter:blur(2px);z-index:10;padding:12px}
+.overlay[hidden],.banner[hidden]{display:none}
+.card{background:var(--plate);border:1px solid var(--lo);border-radius:16px;padding:22px 26px;max-width:720px;width:100%}
+.card.small{max-width:360px;text-align:center}
+.card-menu{display:grid;grid-template-columns:1fr 1.05fr;gap:10px;align-items:center;padding:14px 22px 14px 10px}
+.menu-fig{position:relative}
+#menuFig{width:100%}
+.fig-read{position:absolute;right:8px;top:6px;font-size:10px;color:var(--muted)}
+h1{font-size:clamp(28px,4.4cqw,46px);line-height:.95;letter-spacing:.04em;margin:8px 0 10px}
+h2{font-size:28px;letter-spacing:.04em;margin:6px 0 14px}
+.lede{font-size:13.5px;line-height:1.55;color:var(--muted);margin:0 0 16px;text-wrap:pretty}
+.lede b{color:var(--hi)}
+.cta{font-family:var(--mono);font-size:12px;letter-spacing:.16em;padding:12px 20px;background:var(--hi);color:var(--plate);border:0;border-radius:999px}
+.cta:hover{opacity:.9}
+.fine{font-size:11px;color:var(--muted);margin:10px 0 0}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--lo);border:1px solid var(--lo);border-radius:10px;overflow:hidden;margin-bottom:16px;text-align:left}
+.stats div{background:var(--plate);padding:8px 11px;display:flex;flex-direction:column;gap:2px}
+.stats b{font-family:var(--mono);font-size:16px}
+.stats .best{grid-column:1/-1}
+
+/* console */
+.console{display:flex;align-items:center;gap:16px;padding:10px 16px;border:1px solid var(--lo);border-top:0;border-radius:0 0 14px 14px;background:var(--plate);flex-wrap:wrap}
+.console-target{display:flex;flex-direction:column;gap:3px;min-width:180px}
+.target{font-size:24px;letter-spacing:.07em;white-space:pre;min-height:30px}
+.target .ok{color:var(--mid)}
+.target .bad{color:var(--warn);text-decoration:line-through}
+.target .cut{color:var(--lo);text-decoration:line-through}
+.target .cur{border-bottom:2px solid var(--hi)}
+.target .rest{color:var(--edge)}
+.target .empty{color:var(--edge);font-size:14px}
+.console-feed{flex:1;font-size:11.5px;color:var(--muted);min-width:160px}
+.console-feed b{color:var(--hi)}
+.console-feed .bad{color:var(--warn)}
+.builds{display:flex;gap:6px}
+.build{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;padding:6px 9px;border:1px solid var(--lo);border-radius:10px;background:var(--plate)}
+.build .b-lv{color:var(--hi);min-width:2.6ch}
+.build .b-cost{color:var(--muted)}
+.build.can{border-color:var(--hi)}
+.build.can .b-cost{color:var(--hi)}
+.build.max{opacity:.55}
+.build:disabled{cursor:default}
+.mobile-input{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:-100px}
+.kbd-btn{display:none}
+@media (hover:none),(max-width:720px){.kbd-btn{display:inline-block}}
+
+/* help */
+.help-backdrop{position:fixed;inset:0;background:color-mix(in srgb,var(--page) 60%,transparent);z-index:40}
+.help{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:var(--plate);border-left:1px solid var(--lo);z-index:41;display:flex;flex-direction:column}
+.help[hidden],.help-backdrop[hidden]{display:none}
+.help-head{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 20px 8px}
+.help-head h2{margin:4px 0 0;font-size:22px}
+.help-body{overflow:auto;padding:4px 20px 24px}
+.help-body section{padding:12px 0;border-top:1px solid var(--lo)}
+.help-body p{font-size:13px;line-height:1.55;color:var(--muted);margin:6px 0 0}
+.help-body b{color:var(--hi)}
+.legend{display:grid;gap:1px;margin-top:8px;background:var(--lo);border:1px solid var(--lo);border-radius:8px;overflow:hidden}
+.legend div{display:flex;justify-content:space-between;gap:10px;background:var(--plate);padding:6px 9px;font-size:12px}
+.legend div span:first-child{font-family:var(--mono);font-size:11px;color:var(--hi)}
+.legend div span:last-child{color:var(--muted);text-align:right}
+.help-foot{font-size:11.5px;color:var(--muted);line-height:1.5;padding-top:12px;border-top:1px solid var(--lo)}
+
+@media (max-width:820px){
+  .hud{grid-template-columns:1.6fr 1fr 1fr 1fr 1fr}
+  .hide-sm{display:none}
+  .card-menu{grid-template-columns:1fr;padding:12px 16px}
+  .menu-fig{max-width:220px;margin:0 auto}
+  .lede{font-size:12.5px}
+}
+@media (max-width:560px){
+  .topbar{padding:8px 12px}
+  .brand-sub,.brand-sep{display:none}
+  .shell{padding-block:10px 24px}
+  .hud{grid-template-columns:1.5fr 1fr 1fr}
+  .hud-cell:nth-child(4),.hud-cell:nth-child(7){display:none}
+  .num{font-size:16px}
+  .menu-fig{display:none}
+  .card{padding:16px}
+  .console{gap:10px;padding:10px 12px}
+  .target{font-size:19px}
+  .console-feed{order:5;flex-basis:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  .float,.field.shake #board,.bump{animation:none}
+}
+@media (max-width:560px){
+  .padtag{display:none}
+  .bubble{font-size:clamp(9px,1.32cqw,15px)}
+  .tool{padding:6px 9px;font-size:9.5px}
+}
+
+/* The drawing's own palette, bound to the page tokens. These rules repeat the
+   hairline kernel's: if the kernel's injected sheet is ever missing, every
+   plate still renders as an outline on the ground colour, never as solid ink. */
+[data-hairline]{--hairline-plate:var(--plate);--hairline-hi:var(--hi);--hairline-edge:var(--edge);--hairline-mid:var(--mid);--hairline-lo:var(--lo);position:relative;display:block}
+#menuFig{aspect-ratio:5/4}
+:where([data-hairline]>svg){position:absolute;inset:0;width:100%;height:100%;display:block}
+:where([data-hairline]>svg) :where(path,polygon,ellipse,line){fill:var(--plate);stroke:var(--mid);stroke-width:.9;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
+:where([data-hairline]>svg) :where(.nf){fill:none}
+:where([data-hairline]>svg) :where(.fo){stroke:none}
+:where([data-hairline]>svg) :where(.sil){stroke:var(--edge)}
+:where([data-hairline]>svg) :where(.hi){stroke:var(--hi)}
+:where([data-hairline]>svg) :where(.lo){stroke:var(--lo)}
+:where([data-hairline]>svg) :where(.dash){stroke-dasharray:1 3}
+:where([data-hairline]>svg) :where(.dot){stroke:none;fill:var(--hi)}
+:where([data-hairline]>svg) :where(.dot.m){fill:var(--edge)}
+:where([data-hairline]>svg) :where(.dot.off){fill:var(--lo)}
+
+</style>
+
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Typing Arcade — home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M9 28h14M11 28V11h10v17M9 11V7h3v2h2V7h4v2h2V7h3v4z"/></svg>
+      <span class="brand-word">TYPING</span><span class="brand-sep">/</span><span class="brand-sub">ARCADE</span>
+    </a>
+    <nav class="top-actions" aria-label="Game controls">
+      <button id="btnHelp" class="tool" type="button" aria-haspopup="dialog">? HELP</button>
+      <button id="btnSound" class="tool" type="button" aria-pressed="true">♪ ON</button>
+      <button id="btnTheme" class="tool" type="button">◐ THEME</button>
+      <button id="btnPause" class="tool" type="button" disabled>Ⅱ PAUSE</button>
+    </nav>
+  </header>
+
+  <main class="shell">
+    <section class="hud" aria-label="Game status">
+      <div class="hud-cell hud-keep">
+        <span class="cap">Keep</span>
+        <div class="hp-row">
+          <div class="hp-track" role="progressbar" aria-label="Keep health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" id="hpWrap"><div class="hp-fill" id="hpFill"></div></div>
+          <b class="mono" id="hpText">100</b>
+        </div>
+        <span class="mono sub" id="shieldText">shield · 0/2 clean</span>
+      </div>
+      <div class="hud-cell"><span class="cap">Ink</span><b class="mono num" id="hudInk">0</b></div>
+      <div class="hud-cell"><span class="cap">Score</span><b class="mono num" id="hudScore">0</b></div>
+      <div class="hud-cell"><span class="cap">Wave</span><b class="mono num" id="hudWave">—</b></div>
+      <div class="hud-cell hide-sm"><span class="cap">Accuracy</span><b class="mono num" id="hudAcc">100%</b></div>
+      <div class="hud-cell hide-sm"><span class="cap">Speed</span><b class="mono num"><span id="hudWpm">0</span><small> wpm</small></b></div>
+      <div class="hud-cell"><span class="cap">Combo</span><b class="mono num" id="hudCombo">×1</b></div>
+    </section>
+
+    <section class="stage-wrap">
+      <div class="stage-head">
+        <span class="cap">Fig. 02 — The keep &amp; three lanes</span>
+        <span class="cap dim mono" id="readout">rest</span>
+      </div>
+
+      <div class="field" id="field">
+        <div id="board" data-hairline="keep-field" role="img" aria-label="An isometric board: a round keep at the near end, three lanes running into the distance, turret pads before the keep, and walkers marching in carrying words."></div>
+        <div class="labels" id="labels" aria-hidden="true"></div>
+        <div class="banner" id="banner" hidden></div>
+
+        <div class="overlay" id="menu">
+          <div class="card card-menu">
+            <div class="menu-fig">
+              <div id="menuFig"></div>
+              <span class="mono fig-read" id="menuRead">rest</span>
+            </div>
+            <div class="menu-copy">
+              <p class="cap">An isometric typing defense</p>
+              <h1>TYPING<br/>ARCADE</h1>
+              <p class="lede">Walkers march down three lanes, each carrying a word. <b>Type it</b> and every letter is a bolt from the keep. Spend the <b>ink</b> you earn on turrets — press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> — that bite letters off the end of words for you.</p>
+              <button class="cta" id="btnStart" type="button">▶ START <span class="dim">· Enter</span></button>
+              <p class="fine" id="bestLine"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay" id="pause" hidden>
+          <div class="card small">
+            <p class="cap">Held</p><h2>PAUSED</h2>
+            <button class="cta" id="btnResume" type="button">▶ RESUME <span class="dim">· Esc</span></button>
+          </div>
+        </div>
+
+        <div class="overlay" id="over" hidden>
+          <div class="card small">
+            <p class="cap">The keep has fallen</p><h2>GAME OVER</h2>
+            <div class="stats" id="stats"></div>
+            <button class="cta" id="btnAgain" type="button">↻ PLAY AGAIN <span class="dim">· Enter</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="console">
+        <div class="console-target">
+          <span class="cap">Target</span>
+          <div class="target mono" id="target" aria-live="polite"><span class="empty">—</span></div>
+        </div>
+        <div class="console-feed mono" id="feed">press START, then just type</div>
+        <div class="builds" role="group" aria-label="Turrets">
+          <button class="build" data-lane="0" type="button"><kbd>1</kbd><span class="b-lv">—</span><span class="b-cost">25</span></button>
+          <button class="build" data-lane="1" type="button"><kbd>2</kbd><span class="b-lv">—</span><span class="b-cost">25</span></button>
+          <button class="build" data-lane="2" type="button"><kbd>3</kbd><span class="b-lv">—</span><span class="b-cost">25</span></button>
+        </div>
+        <button class="tool kbd-btn" id="btnKeyboard" type="button">⌨ TYPE</button>
+        <input id="mobileInput" class="mobile-input" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Type here" />
+      </div>
+    </section>
+  </main>
+
+  <div class="help-backdrop" id="helpBack" hidden></div>
+  <aside class="help" id="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle" hidden>
+    <div class="help-head">
+      <div><span class="cap">Typing Arcade</span><h2 id="helpTitle">How to play</h2></div>
+      <button class="tool" id="btnHelpClose" type="button">✕ CLOSE</button>
+    </div>
+    <div class="help-body">
+      <section><span class="cap">01 · Type to fire</span>
+        <p>The <b>target</b> is the walker drawn in the darkest line, with a dashed ring at its feet; its word is also in the console. Type straight through it: each correct letter is a bolt from the keep. Finish the word and the walker breaks apart. At the start of a word, typing another walker's first letter switches to it — no two walkers on the field start with the same letter.</p></section>
+      <section><span class="cap">02 · Typos fire back</span>
+        <p>A wrong letter never halts you: it is marked, the cursor moves on, and that walker fires a bolt at the keep (−3). A walker that reaches <b>the line</b> stops and batters the keep until it falls.</p></section>
+      <section><span class="cap">03 · Ink &amp; turrets</span>
+        <p>Every correct letter earns <b>1 ink</b>; clean words and kills earn more. Press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> (or tap the buttons) to build or upgrade the turret on that lane, up to level 3. Turrets fire on their own and <b>bite the last letter</b> off the nearest word in their lane, so your words get shorter. Higher levels fire faster and reach further down the lane.</p>
+        <div class="legend">
+          <div><span>Level 1</span><span>25 ink · every 2.6 s · near half</span></div>
+          <div><span>Level 2</span><span>45 ink · every 1.8 s · most of the lane</span></div>
+          <div><span>Level 3</span><span>70 ink · every 1.2 s · the whole lane</span></div>
+        </div></section>
+      <section><span class="cap">04 · Clean words &amp; the shield</span>
+        <p>A word with no typo heals the keep +2 and adds to your <b>combo</b> (score ×1 to ×5). Two clean words in a row raise a <b>shield</b> round the keep that soaks three hits. Your first typo drops it.</p></section>
+      <section><span class="cap">05 · Walkers</span>
+        <div class="legend">
+          <div><span>Runner</span><span>small, quick, short words</span></div>
+          <div><span>Walker</span><span>the steady march</span></div>
+          <div><span>Brute</span><span>slow, shouldered, long words, hits hard</span></div>
+          <div><span>Herald</span><span>wave 3 on · carries a sign with a whole line — spaces count</span></div>
+        </div></section>
+      <section><span class="cap">06 · Keys</span>
+        <div class="legend">
+          <div><span>A–Z · Space</span><span>type</span></div>
+          <div><span>1 · 2 · 3</span><span>build / upgrade turret</span></div>
+          <div><span>Esc</span><span>pause · close this panel</span></div>
+          <div><span>Enter</span><span>start · play again</span></div>
+        </div></section>
+      <footer class="help-foot">Drawn with the <a href="https://github.com/lucasmarkes/hairline" target="_blank" rel="noreferrer">hairline</a> kernel by Lucas Marques (MIT): rounded solids, one stroke in four weights, the bright edge as the only highlight.</footer>
+    </div>
+  </aside>
+
+
+<script>
+/* hairline kernel sha256:346b48bdef2cdfafd5343eba01494255cf75f9c078e6fcd1aafc62bab62980a1 */
+/*
+ * HL: everything a figure may call. Read this index; the code under it is the
+ * package's src/core, unchanged, and a figure should not need to read it.
+ *
+ * Every figure is drawn in a 400 × 320 viewBox. World space is x/y on the
+ * ground and z up. Plates are filled with the ground colour and painted back
+ * to front, so a nearer one covers a farther one: append in that order. At
+ * the default camera, Cam(45, 0.5, S), +x runs down to the right and +y down
+ * to the left, so the corner with the largest x and y is nearest the viewer:
+ * append by ascending x + y, from the far corner (smallest x and y) to it.
+ *
+ * Camera
+ *   Cam(azDeg, k, S)                       a camera: azimuth in degrees, k = sin(elevation) (0.5 is the 2:1 view), S = scale
+ *   fit(C, points, cx, cy)                 centres the box of [x, y, z] points on (cx, cy); call it once, before proj
+ *                                          it only centres, it never scales: choose S by trying values, with the most extreme pose in points.
+ *                                          The six figures use S 1.42 to 2.12; the boxes they fit come out 230 to 310 wide and 180 to 245 tall
+ *   proj(C)                                returns P(x, y, z), which gives [sx, sy]
+ *   unproj(C, sx, sy, z)                   the world [x, y] under a screen point, on the plane at height z
+ *   facing(C)                              returns front(sample): whether a ring sample faces the camera
+ * Rounded solids
+ *   rrect(u0, v0, u1, v1, r, n)            a rounded rectangle, as a ring of samples {u, v, nu, nv}
+ *   circ(R, n)                             a circle, as a ring
+ *   rings(x0, y0, x1, y1, r, b)            [ring, inner]: a rounded footprint and its crease ring, inset by b
+ *                                          r, the corner radius, is cut to half the shorter side. b, the crease's inset in world units
+ *                                          (0.6 to 2.2 in the figures), must stay under half the shorter side or the crease turns inside out
+ *   prism(P, front, ring, inner, z0, z1)   {sil, crease}: a solid standing from z0 to z1, as two path strings
+ *   ringAt(P, ring, z)                     the ring's points, projected at height z
+ *   run(ring, keep)                        the one cyclic run of samples that pass keep
+ *   hull(points)                           the convex hull of screen points
+ *   extremes(P, ring)                      [left, right, nearest] samples: where dashed drops fall from
+ *   fillet(points, radii, n)               rounds every vertex of a closed polygon; returns the new points
+ *                                          radii is an array, one radius per vertex, each cut to half its shorter edge; a single number gives NaN.
+ *                                          n is the steps round each corner, default 4: each vertex becomes n + 1 points
+ *   ghost(P, front, ring, z0, depth)       a reflection's path {d, y0, y1}; reflect() draws it for you
+ * Paths and numbers
+ *   poly(points)                           a closed path string
+ *   open(points)                           an open polyline string
+ *   seg(a, b)                              one segment between two screen points [sx, sy], as its own subpath; project world points with P first
+ *   clamp(v, a, b)
+ *   lerp(a, b, t)
+ *   rad(deg)
+ *   r2(n)                                  two decimals
+ * The continuous clock: one spring per moving number
+ *   spring(x, opts)                        at rest on x; write .t to retarget; opts {k, c, m, eps}, default k 100, c 18, m 1
+ *   stepS(sp, dt)                          advances by dt seconds; returns whether it is still moving
+ * The discrete clock: a 700ms tween on (.32, .72, 0, 1)
+ *   tween(v, dur)                          at rest on v; dur defaults to 700 (ms)
+ *   tset(tw, to, now, delay)               retargets from where it is, after delay ms: the stagger
+ *                                          the same target again does nothing, so calling it on every pointer move is safe
+ *   tval(tw, now)                          its value at now
+ *   tdone(tw, now)                         whether it has landed
+ *   bezier(x1, y1, x2, y2)                 a CSS cubic-bezier, as a function of progress
+ *   EASE_LIFT                              the lift curve itself
+ *   reducedMotion()                        true when the reader asked for less motion; springs and tweens already land at once
+ *   setReducedMotion(on)                   the loop's business, not a figure's
+ * Drawing
+ *   mk(tag, attrs, parent)                 one svg element: the only way a figure makes a node
+ *   solid(parent)                          {g, sil, cr}: a group holding a silhouette path and a crease path
+ *   put(solid, paths)                      writes prism()'s {sil, crease} into solid()'s {sil, cr}: sil into sil, crease into cr
+ *   flatDot(parent, C, r, cls)             a dot lying on the ground plane; cls is "dot", "dot m" or "dot off"
+ *   place(el, point)                       moves a dot or a circle to [sx, sy]
+ *   reflect(svg, parent, P, front, ring, z0, depth)   a fading mirror under a solid
+ *   fade(svg, y0, y1, a0)                  a vertical fade, as a mask; returns the value for a mask attribute
+ * Life
+ *   register(stage, tick)                  joins the one frame loop; tick(dt in seconds, now in ms) returns true to ask for another frame; gives {wake, unregister}
+ *   pointer(stage, handlers)               {move(point), down(point), leave()}, points in viewBox units; returns its disposer
+ *   disposer()                             {add, on, dispose}: collects tear-down, so destroy is bag.dispose
+ * The bench's business, not a figure's
+ *   css(lightDark)
+ *   inject(root)
+ *   tour(stage, stops, onStop)             an unseen pointer that walks the stops, [x, y] in viewBox units or null to leave, and gives way to a real one; onStop(i) on each arrival; returns {stop}
+ *   LAP                                    the default stops: a diamond around the centre, then a leave
+ *
+ * Classes, on path, polygon, ellipse and line. They are the whole palette; a
+ * figure sets no colour, width or fill of its own.
+ *     (none)   filled with the ground colour, medium stroke
+ *     sil      the silhouette's stroke        hi    the bright stroke: the only highlight
+ *     lo       the dim stroke                 nf    no fill        fo   fill only, no stroke
+ *     dash     a dashed guide
+ *     dot      a bright dot                   dot m   a medium dot     dot off   a dim dot
+ */
+var HL = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // packages/hairline/src/core/kernel.ts
+  var kernel_exports = {};
+  __export(kernel_exports, {
+    Cam: () => Cam,
+    EASE_LIFT: () => EASE_LIFT,
+    LAP: () => LAP,
+    bezier: () => bezier,
+    circ: () => circ,
+    clamp: () => clamp,
+    css: () => css,
+    disposer: () => disposer,
+    extremes: () => extremes,
+    facing: () => facing,
+    fade: () => fade,
+    fillet: () => fillet,
+    fit: () => fit,
+    flatDot: () => flatDot,
+    ghost: () => ghost,
+    hull: () => hull,
+    inject: () => inject,
+    lerp: () => lerp,
+    mk: () => mk,
+    open: () => open,
+    place: () => place,
+    pointer: () => pointer,
+    poly: () => poly,
+    prism: () => prism,
+    proj: () => proj,
+    put: () => put,
+    r2: () => r2,
+    rad: () => rad,
+    reducedMotion: () => reducedMotion,
+    reflect: () => reflect,
+    register: () => register,
+    ringAt: () => ringAt,
+    rings: () => rings,
+    rrect: () => rrect,
+    run: () => run,
+    seg: () => seg,
+    setReducedMotion: () => setReducedMotion,
+    solid: () => solid,
+    spring: () => spring,
+    stepS: () => stepS,
+    tdone: () => tdone,
+    tour: () => tour,
+    tset: () => tset,
+    tval: () => tval,
+    tween: () => tween,
+    unproj: () => unproj
+  });
+
+  // packages/hairline/src/core/iso.ts
+  var clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  var lerp = (a, b, t) => a + (b - a) * t;
+  var rad = (d) => d * Math.PI / 180;
+  var r2 = (n) => Math.round(n * 100) / 100;
+  var poly = (pts) => "M" + pts.map((p) => r2(p[0]) + " " + r2(p[1])).join("L") + "Z";
+  var seg = (a, b) => `M${r2(a[0])} ${r2(a[1])}L${r2(b[0])} ${r2(b[1])}`;
+  var open = (pts) => pts.length < 2 ? "" : "M" + pts.map((p) => r2(p[0]) + " " + r2(p[1])).join("L");
+  var Cam = (azDeg, k, S) => ({ az: rad(azDeg), k, S, ox: 0, oy: 0 });
+  function proj(C) {
+    const c = Math.cos(C.az), s = Math.sin(C.az), zf = Math.sqrt(1 - C.k * C.k);
+    return (x, y, z) => {
+      const X = x * c - y * s, Y = x * s + y * c;
+      return [C.ox + C.S * X, C.oy + C.S * (Y * C.k - z * zf)];
+    };
+  }
+  function unproj(C, sx, sy, z) {
+    const c = Math.cos(C.az), s = Math.sin(C.az), zf = Math.sqrt(1 - C.k * C.k);
+    const X = (sx - C.ox) / C.S, Y = ((sy - C.oy) / C.S + z * zf) / C.k;
+    return [X * c + Y * s, -X * s + Y * c];
+  }
+  function fit(C, pts, cx, cy) {
+    C.ox = 0;
+    C.oy = 0;
+    const P = proj(C);
+    let a = 1e9, b = -1e9, c = 1e9, d = -1e9;
+    for (const p of pts) {
+      const q = P(p[0], p[1], p[2]);
+      a = Math.min(a, q[0]);
+      b = Math.max(b, q[0]);
+      c = Math.min(c, q[1]);
+      d = Math.max(d, q[1]);
+    }
+    C.ox = cx - (a + b) / 2;
+    C.oy = cy - (c + d) / 2;
+  }
+  function rrect(u0, v0, u1, v1, r, n = 4) {
+    r = Math.max(0, Math.min(r, (u1 - u0) / 2, (v1 - v0) / 2));
+    const out = [];
+    for (const [cu, cv, a0] of [[u1 - r, v1 - r, 0], [u0 + r, v1 - r, 90], [u0 + r, v0 + r, 180], [u1 - r, v0 + r, 270]])
+      for (let k = 0; k <= n; k++) {
+        const a = rad(a0 + 90 * k / n), ca = Math.cos(a), sa = Math.sin(a);
+        out.push({ u: cu + r * ca, v: cv + r * sa, nu: ca, nv: sa });
+      }
+    return out;
+  }
+  function circ(R, n = 96) {
+    const out = [];
+    for (let k = 0; k < n; k++) {
+      const a = k / n * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      out.push({ u: R * ca, v: R * sa, nu: ca, nv: sa });
+    }
+    return out;
+  }
+  function hull(input) {
+    const pts = input.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const x = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const p of pts) {
+      while (lo.length > 1 && x(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop();
+      lo.push(p);
+    }
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      while (up.length > 1 && x(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop();
+      up.push(p);
+    }
+    lo.pop();
+    up.pop();
+    return lo.concat(up);
+  }
+  var ringAt = (P, ring, z) => ring.map((q) => P(q.u, q.v, z));
+  var facing = (C) => {
+    const s = Math.sin(C.az), c = Math.cos(C.az);
+    return (q) => q.nu * s + q.nv * c >= -1e-6;
+  };
+  function run(ring, keep) {
+    const n = ring.length;
+    let s = -1;
+    for (let i = 0; i < n; i++) if (keep(ring[i]) && !keep(ring[(i + n - 1) % n])) {
+      s = i;
+      break;
+    }
+    if (s < 0) return keep(ring[0]) ? ring.slice() : [];
+    const out = [];
+    for (let k = 0; k < n && keep(ring[(s + k) % n]); k++) out.push(ring[(s + k) % n]);
+    return out;
+  }
+  function prism(P, front, ring, inner, z0, z1) {
+    return {
+      sil: poly(hull(ringAt(P, ring, z1).concat(ringAt(P, ring, z0)))),
+      crease: inner ? open(ringAt(P, run(inner, front), z1)) : ""
+    };
+  }
+  var rings = (x0, y0, x1, y1, r, b) => [
+    rrect(x0, y0, x1, y1, r),
+    rrect(x0 + b, y0 + b, x1 - b, y1 - b, Math.max(0.3, r - b))
+  ];
+  function extremes(P, ring) {
+    const pr = ring.map((q) => P(q.u, q.v, 0));
+    let a = 0, b = 0, c = 0;
+    pr.forEach((p, k) => {
+      if (p[0] < pr[a][0]) a = k;
+      if (p[0] > pr[b][0]) b = k;
+      if (p[1] > pr[c][1]) c = k;
+    });
+    return [ring[a], ring[b], ring[c]];
+  }
+  function fillet(pts, rs, n = 4) {
+    const m = pts.length, out = [];
+    for (let i = 0; i < m; i++) {
+      const a = pts[(i + m - 1) % m], p = pts[i], b = pts[(i + 1) % m];
+      const la = Math.hypot(a[0] - p[0], a[1] - p[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]);
+      const t = Math.min(rs[i], la / 2, lb / 2);
+      const p1 = [p[0] + (a[0] - p[0]) / la * t, p[1] + (a[1] - p[1]) / la * t];
+      const p2 = [p[0] + (b[0] - p[0]) / lb * t, p[1] + (b[1] - p[1]) / lb * t];
+      for (let k = 0; k <= n; k++) {
+        const s = k / n, w = 1 - s;
+        out.push([w * w * p1[0] + 2 * w * s * p[0] + s * s * p2[0], w * w * p1[1] + 2 * w * s * p[1] + s * s * p2[1]]);
+      }
+    }
+    return out;
+  }
+  function ghost(P, front, ring, z0, depth) {
+    const f = run(ring, front), lowP = ringAt(P, f, z0 - depth);
+    return {
+      d: open(lowP) + [f[0], f[f.length - 1]].map((q) => seg(P(q.u, q.v, z0), P(q.u, q.v, z0 - depth))).join(""),
+      y0: Math.min(...ringAt(P, f, z0).map((p) => p[1])),
+      y1: Math.max(...lowP.map((p) => p[1])) + 2
+    };
+  }
+
+  // packages/hairline/src/core/motion.ts
+  var reduced = false;
+  var setReducedMotion = (on) => {
+    reduced = on;
+  };
+  var reducedMotion = () => reduced;
+  function spring(x, o = {}) {
+    return { x, v: 0, t: x, k: o.k ?? 100, c: o.c ?? 18, m: o.m ?? 1, eps: o.eps ?? 0.01 };
+  }
+  function stepS(sp, dt) {
+    if (reduced) {
+      sp.x = sp.t;
+      sp.v = 0;
+      return false;
+    }
+    const n = Math.max(1, Math.ceil(dt * 240)), h = dt / n;
+    for (let i = 0; i < n; i++) {
+      const a = (-sp.k * (sp.x - sp.t) - sp.c * sp.v) / sp.m;
+      sp.v += a * h;
+      sp.x += sp.v * h;
+    }
+    if (Math.abs(sp.x - sp.t) < sp.eps && Math.abs(sp.v) < sp.eps * 10) {
+      sp.x = sp.t;
+      sp.v = 0;
+      return false;
+    }
+    return true;
+  }
+  function bezier(x1, y1, x2, y2) {
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const X = (u) => ((ax * u + bx) * u + cx) * u;
+    const Y = (u) => ((ay * u + by) * u + cy) * u;
+    const dX = (u) => (3 * ax * u + 2 * bx) * u + cx;
+    return (t) => {
+      if (t <= 0) return 0;
+      if (t >= 1) return 1;
+      let u = t;
+      for (let i = 0; i < 8; i++) {
+        const e = X(u) - t;
+        if (Math.abs(e) < 1e-5) break;
+        const d = dX(u);
+        if (Math.abs(d) < 1e-6) break;
+        u -= e / d;
+      }
+      if (!(u >= 0 && u <= 1) || Math.abs(X(u) - t) > 1e-4) {
+        let lo = 0, hi = 1;
+        u = t;
+        for (let i = 0; i < 24; i++) {
+          if (X(u) < t) lo = u;
+          else hi = u;
+          u = (lo + hi) / 2;
+        }
+      }
+      return Y(u);
+    };
+  }
+  var EASE_LIFT = bezier(0.32, 0.72, 0, 1);
+  var tween = (v, dur = 700) => ({ from: v, to: v, t0: -1e9, dur });
+  var tval = (tw, now) => {
+    const p = clamp((now - tw.t0) / tw.dur, 0, 1);
+    return tw.from + (tw.to - tw.from) * (reduced ? 1 : EASE_LIFT(p));
+  };
+  var tset = (tw, to, now, delay) => {
+    if (tw.to === to) return;
+    tw.from = tval(tw, now);
+    tw.to = to;
+    tw.t0 = now + delay;
+  };
+  var tdone = (tw, now) => reduced || now >= tw.t0 + tw.dur;
+
+  // packages/hairline/src/core/stage.ts
+  var NS = "http://www.w3.org/2000/svg";
+  function mk(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) e.setAttribute(k, String(attrs[k]));
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function solid(parent) {
+    const g = mk("g", {}, parent);
+    return { g, sil: mk("path", { class: "sil" }, g), cr: mk("path", { class: "nf lo" }, g) };
+  }
+  var put = (el, s) => {
+    el.sil.setAttribute("d", s.sil);
+    el.cr.setAttribute("d", s.crease);
+  };
+  var flatDot = (parent, C, r, cls) => mk("ellipse", { rx: r2(r * C.S), ry: r2(r * C.S * C.k), class: cls }, parent);
+  var place = (el, q) => {
+    el.setAttribute("cx", String(r2(q[0])));
+    el.setAttribute("cy", String(r2(q[1])));
+  };
+  var fid = 0;
+  function fade(svg, y0, y1, a0 = 0.7) {
+    const id = "hl-fd" + ++fid, defs = mk("defs", {}, svg);
+    const lg = mk("linearGradient", { id: id + "g", gradientUnits: "userSpaceOnUse", x1: 0, y1: r2(y0), x2: 0, y2: r2(y1) }, defs);
+    mk("stop", { offset: 0, "stop-color": "#fff", "stop-opacity": a0 }, lg);
+    mk("stop", { offset: 1, "stop-color": "#fff", "stop-opacity": 0 }, lg);
+    const m = mk("mask", { id, maskUnits: "userSpaceOnUse", x: 0, y: 0, width: 400, height: 320 }, defs);
+    mk("rect", { x: 0, y: 0, width: 400, height: 320, fill: `url(#${id}g)` }, m);
+    return `url(#${id})`;
+  }
+  function reflect(svg, parent, P, front, ring, z0, depth) {
+    const r = ghost(P, front, ring, z0, depth);
+    const gh = mk("g", { class: "ghost", mask: fade(svg, r.y0, r.y1) }, parent);
+    mk("path", { d: r.d }, gh);
+  }
+  var boards = [];
+  var byStage = /* @__PURE__ */ new Map();
+  var raf = 0;
+  var last = 0;
+  var io = null;
+  var rm = null;
+  function frame() {
+    const now = performance.now();
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1e3));
+    last = now;
+    let any = false;
+    for (const b of boards.slice()) if (b.vis && b.awake) {
+      try {
+        b.awake = !!b.tick(dt, now);
+      } catch (err) {
+        b.awake = false;
+        setTimeout(() => {
+          throw err;
+        });
+      }
+      any = any || b.awake;
+    }
+    raf = any ? requestAnimationFrame(frame) : 0;
+  }
+  function wake(b) {
+    b.awake = true;
+    if (!raf) {
+      last = performance.now();
+      raf = requestAnimationFrame(frame);
+    }
+  }
+  var onMotion = () => {
+    setReducedMotion(!!rm?.matches);
+    boards.forEach(wake);
+  };
+  function start() {
+    if (io) return;
+    io = new IntersectionObserver((es) => {
+      for (const e of es) {
+        const set = byStage.get(e.target);
+        if (!set) continue;
+        for (const b of set) {
+          b.vis = e.isIntersecting;
+          if (b.vis) wake(b);
+        }
+      }
+    }, { rootMargin: "80px" });
+    rm = matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(rm.matches);
+    rm.addEventListener("change", onMotion);
+  }
+  function stop() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    io?.disconnect();
+    io = null;
+    rm?.removeEventListener("change", onMotion);
+    rm = null;
+  }
+  function register(stage, tick) {
+    start();
+    const b = { stage, tick, vis: false, awake: true };
+    boards.push(b);
+    const peers = byStage.get(stage);
+    if (peers) {
+      for (const p of peers) b.vis = p.vis;
+      peers.add(b);
+      if (b.vis) wake(b);
+    } else {
+      byStage.set(stage, /* @__PURE__ */ new Set([b]));
+      io.observe(stage);
+    }
+    tick(0, performance.now());
+    let gone = false;
+    return {
+      wake: () => {
+        if (!gone) wake(b);
+      },
+      unregister: () => {
+        if (gone) return;
+        gone = true;
+        boards = boards.filter((x) => x !== b);
+        const set = byStage.get(stage);
+        if (set) {
+          set.delete(b);
+          if (!set.size) {
+            byStage.delete(stage);
+            io?.unobserve(stage);
+          }
+        }
+        if (!boards.length) stop();
+      }
+    };
+  }
+  var handlers = /* @__PURE__ */ new WeakMap();
+  var touring = /* @__PURE__ */ new WeakMap();
+  function pointer(stage, on) {
+    handlers.set(stage, on);
+    let tm = 0;
+    const pt = (e) => {
+      const r = stage.getBoundingClientRect();
+      return [(e.clientX - r.left) / r.width * 400, (e.clientY - r.top) / r.height * 320];
+    };
+    const move = (e) => {
+      clearTimeout(tm);
+      touring.get(stage)?.hold();
+      on.move(pt(e), e);
+    };
+    const down = (e) => {
+      clearTimeout(tm);
+      touring.get(stage)?.hold();
+      if (e.pointerType !== "mouse") stage.releasePointerCapture?.(e.pointerId);
+      if (on.down) on.down(pt(e), e);
+      else on.move(pt(e), e);
+    };
+    const leave = (e) => {
+      clearTimeout(tm);
+      tm = window.setTimeout(() => {
+        on.leave(e);
+        touring.get(stage)?.release();
+      }, e.pointerType === "mouse" ? 0 : 1400);
+    };
+    stage.addEventListener("pointermove", move);
+    stage.addEventListener("pointerdown", down);
+    stage.addEventListener("pointerleave", leave);
+    return () => {
+      clearTimeout(tm);
+      if (handlers.get(stage) === on) handlers.delete(stage);
+      stage.removeEventListener("pointermove", move);
+      stage.removeEventListener("pointerdown", down);
+      stage.removeEventListener("pointerleave", leave);
+    };
+  }
+  var LAP = [[128, 150], [200, 118], [272, 150], [200, 206], null];
+  var TRAVEL = 900;
+  var DWELL = 1200;
+  var REST = 1800;
+  var RESUME = 1200;
+  var STAGGER = 450;
+  var GHOST = { pointerType: "ghost" };
+  var started = 0;
+  function entry([x, y]) {
+    const dx = x - 200, dy = y - 160;
+    if (!dx && !dy) return [200, 320];
+    const k = Math.min(dx ? (dx > 0 ? 200 : -200) / dx : Infinity, dy ? (dy > 0 ? 160 : -160) / dy : Infinity);
+    return [200 + dx * k, 160 + dy * k];
+  }
+  function tour(stage, stops, onStop) {
+    let i = 0;
+    let wait = RESUME + STAGGER * (started++ % 4);
+    let t = -1;
+    let at = null;
+    let origin = [200, 320];
+    let hand = false, keys = stage.contains(stage.ownerDocument.activeElement);
+    let gone = false;
+    const leave = () => {
+      at = null;
+      t = -1;
+      handlers.get(stage)?.leave(GHOST);
+    };
+    const tick = (dt) => {
+      if (hand || keys || !stops.length) return false;
+      if (reducedMotion()) {
+        if (at) leave();
+        return false;
+      }
+      if (wait > 0) {
+        wait -= dt * 1e3;
+        return true;
+      }
+      const stop2 = stops[i];
+      if (stop2 === null) {
+        if (at) leave();
+        onStop?.(i);
+        i = (i + 1) % stops.length;
+        wait = REST;
+        return true;
+      }
+      const h = handlers.get(stage);
+      if (!h) return true;
+      if (t < 0) {
+        origin = at ?? entry(stop2);
+        t = 0;
+      }
+      t = Math.min(TRAVEL, t + dt * 1e3);
+      const k = EASE_LIFT(t / TRAVEL);
+      at = [origin[0] + (stop2[0] - origin[0]) * k, origin[1] + (stop2[1] - origin[1]) * k];
+      h.move(at, GHOST);
+      if (t < TRAVEL) return true;
+      onStop?.(i);
+      i = (i + 1) % stops.length;
+      t = -1;
+      wait = DWELL;
+      return true;
+    };
+    const take = () => {
+      at = null;
+      t = -1;
+    };
+    const give = () => {
+      if (hand || keys) return;
+      i = 0;
+      t = -1;
+      wait = RESUME;
+      board.wake();
+    };
+    const me = {
+      hold: () => {
+        hand = true;
+        take();
+      },
+      release: () => {
+        if (!hand) return;
+        hand = false;
+        give();
+      }
+    };
+    const focusIn = () => {
+      keys = true;
+      take();
+    };
+    const focusOut = (e) => {
+      if (keys && !stage.contains(e.relatedTarget)) {
+        keys = false;
+        give();
+      }
+    };
+    stage.addEventListener("focusin", focusIn);
+    stage.addEventListener("focusout", focusOut);
+    touring.set(stage, me);
+    const board = register(stage, tick);
+    return {
+      stop: () => {
+        if (gone) return;
+        gone = true;
+        board.unregister();
+        stage.removeEventListener("focusin", focusIn);
+        stage.removeEventListener("focusout", focusOut);
+        if (touring.get(stage) === me) touring.delete(stage);
+        if (at) leave();
+      }
+    };
+  }
+  function disposer() {
+    let fns = [];
+    return {
+      add: (fn) => {
+        fns.push(fn);
+      },
+      on: (target, type, fn, opts) => {
+        const h = fn;
+        target.addEventListener(type, h, opts);
+        fns.push(() => target.removeEventListener(type, h, opts));
+      },
+      dispose: () => {
+        const run2 = fns;
+        fns = [];
+        for (let i = run2.length - 1; i >= 0; i--) run2[i]();
+      }
+    };
+  }
+
+  // packages/hairline/src/core/styles.ts
+  var LIGHT = { plate: "#ffffff", hi: "#232327", edge: "#a4a4ac", mid: "#c3c3c9", lo: "#e0e0e4" };
+  var DARK = { plate: "#08090a", hi: "#d0d6e0", edge: "#5b5d64", mid: "#3e3e44", lo: "#29292d" };
+  var KEYS = ["plate", "hi", "edge", "mid", "lo"];
+  var vars = (p) => KEYS.map((k) => `--hl-${k}:var(--hairline-${k},${p[k]});`).join("");
+  var EASE = "cubic-bezier(0.5,0,0.1,1)";
+  var SVG = ":where([data-hairline]>svg)";
+  function css(lightDark) {
+    const both = Object.fromEntries(KEYS.map((k) => [k, `light-dark(${LIGHT[k]},${DARK[k]})`]));
+    return [
+      // the box, and the palette: light unless something below says otherwise
+      `:where([data-hairline]){display:block;position:relative;aspect-ratio:5/4;touch-action:pan-y;user-select:none;-webkit-user-select:none;--hl-sw:var(--hairline-stroke,0.9);${vars(LIGHT)}}`,
+      // the page's color-scheme
+      lightDark ? `:where([data-hairline]){${vars(both)}}` : "",
+      // an ancestor that says dark
+      `:where(.dark,[data-theme="dark"]) :where([data-hairline]){${vars(DARK)}}`,
+      // the figure's own theme option
+      `:where([data-hairline][data-hairline-theme="light"]){${vars(LIGHT)}}`,
+      `:where([data-hairline][data-hairline-theme="dark"]){${vars(DARK)}}`,
+      `:where([data-hairline]:focus-visible){outline:1.5px solid var(--hl-hi);outline-offset:2px}`,
+      `${SVG}{position:absolute;inset:0;width:100%;height:100%;display:block}`,
+      // Riffle's live region: read, not seen
+      `:where([data-hairline]>[data-hairline-live]){position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}`,
+      // the drawing: plates are filled with the plate colour and painted back to front
+      `${SVG} :where(path,polygon,ellipse,line){fill:var(--hl-plate);stroke:var(--hl-mid);stroke-width:var(--hl-sw);vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round;transition:stroke 260ms ${EASE}}`,
+      `${SVG} :where(.nf){fill:none}`,
+      `${SVG} :where(.fo){stroke:none}`,
+      `${SVG} :where(.sil){stroke:var(--hl-edge)}`,
+      `${SVG} :where(.hi){stroke:var(--hl-hi)}`,
+      `${SVG} :where(.lo){stroke:var(--hl-lo)}`,
+      `${SVG} :where(.dash){stroke-dasharray:1 3}`,
+      `${SVG} :where(.dot){stroke:none;fill:var(--hl-hi);transition:fill 260ms ${EASE}}`,
+      `${SVG} :where(.dot.m){fill:var(--hl-edge)}`,
+      `${SVG} :where(.dot.off){fill:var(--hl-lo)}`,
+      `${SVG} :where(.ghost path){fill:none;stroke:var(--hl-mid)}`
+    ].join("");
+  }
+  var done = /* @__PURE__ */ new WeakSet();
+  function inject(root) {
+    if (done.has(root)) return;
+    done.add(root);
+    const doc = root.nodeType === 9 ? root : root.ownerDocument;
+    const win = doc.defaultView;
+    const text = css(!!win?.CSS?.supports?.("color", "light-dark(#000,#fff)"));
+    if (win && "adoptedStyleSheets" in root) {
+      try {
+        const sheet = new win.CSSStyleSheet();
+        sheet.replaceSync(text);
+        root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+        return;
+      } catch {
+      }
+    }
+    const style = doc.createElement("style");
+    style.setAttribute("data-hairline-style", "");
+    style.textContent = text;
+    (root.nodeType === 9 ? doc.head ?? doc.documentElement : root).appendChild(style);
+  }
+  return __toCommonJS(kernel_exports);
+})();
+/* /hairline kernel */
+
+</script>
+<script type="module">
+/*
+ * Hairline Keep — an isometric typing defense drawn with the hairline kernel.
+ *
+ * The board is one hairline drawing: rounded solids built with rings/prism,
+ * painted back to front, one stroke in four weights, the bright edge as the
+ * only highlight (it marks the current target). Words are never drawn into the
+ * figure: they live in HTML bubbles laid over it. All motion runs in the
+ * kernel's one frame loop (HL.register); springs for where, tweens for which.
+ */
+const {
+  Cam, fit, proj, facing, rings, rrect, circ, prism, ringAt, run, poly, open, seg,
+  clamp, lerp, rad, mk, solid, put, flatDot, place, register, inject,
+  tween, tset, tval, tdone, spring, stepS, reducedMotion,
+} = HL;
+
+/* ───────────────────────── words ───────────────────────── */
+const SHORT = 'arc,ash,bay,bolt,bow,cart,clay,coal,crow,dawn,dew,dust,elm,fang,fern,flag,flint,fog,fox,gate,gem,glow,gust,hawk,helm,hill,horn,ink,iron,ivy,jade,jest,keel,kite,lamp,lark,leaf,lens,loom,lynx,mast,mint,moat,moth,nail,nest,oak,oar,orb,owl,path,pike,pine,quay,quill,raft,reed,rook,rope,rune,sage,salt,seed,shoe,silk,slab,soot,spur,star,tide,tin,toll,tusk,urn,vale,vane,vine,wax,well,wick,wing,wolf,yarn,yew,yoke,zinc,zeal'.split(',');
+const MID = 'anchor,archer,armour,beacon,bridge,bucket,canyon,castle,cinder,cipher,cobble,copper,cursor,dagger,drifts,dragon,embers,falcon,fathom,ferric,forger,gallop,garden,gravel,goblet,hammer,harbor,hearth,helmet,hollow,island,jasper,jigsaw,kettle,kindle,ladder,lantern,legion,marble,meadow,mortar,needle,nimbus,oracle,orchid,parcel,pebble,pillar,plinth,quiver,quarry,rampart,ribbon,rudder,saddle,sentry,signal,timber,turret,tunnel,umbral,vessel,voyage,walker,willow,window,yonder,zenith,zephyr'.split(',');
+const LONG = 'barricade,battlement,blacksmith,blueprint,catapult,chronicle,drawbridge,earthwork,embrasure,fortitude,garrison,gatehouse,guardian,hairline,horseshoe,isometric,keystroke,labyrinth,lighthouse,longbowman,machinery,mountaineer,nightwatch,outrider,palisade,parchment,pathfinder,portcullis,quartermaster,rainmaker,scaffolding,silhouette,stronghold,trebuchet,undercroft,vanguard,watchtower,wheelwright,yeomanry'.split(',');
+const LINES = ['hold the line','raise the gate','light the beacon','the wall holds','ink and iron','type to defend','the keep stands','bring the rope','watch the gate','the tide turns','sound the horn','arrows at dawn','stone on stone','a quick red fox','keep the fire','shields up now'];
+
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const rand = (a, b) => a + Math.random() * (b - a);
+const $ = (id) => document.getElementById(id);
+
+/* ───────────────────────── storage (best-effort) ───────────────────────── */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('hairline-keep-' + k); return v == null ? d : v; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('hairline-keep-' + k, String(v)); } catch { /* private mode */ } },
+};
+
+/* ───────────────────────── sound: a tiny synth ───────────────────────── */
+let AC = null, master = null, soundOn = store.get('sound', 'on') !== 'off';
+function audio() {
+  if (!soundOn) return null;
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = 0.8; master.connect(AC.destination); } catch { AC = null; } }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(f0, f1, dur, type = 'square', vol = 0.1, delay = 0) {
+  const ac = audio(); if (!ac) return;
+  const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.02);
+}
+const SFX = {
+  shoot: () => tone(820, 240, 0.06, 'square', 0.06),
+  turret: () => tone(520, 900, 0.05, 'triangle', 0.07),
+  hit: () => tone(1300, 900, 0.03, 'square', 0.04),
+  wrong: () => tone(180, 90, 0.12, 'square', 0.08),
+  eshoot: () => tone(220, 70, 0.14, 'sawtooth', 0.07),
+  hurt: () => { tone(140, 48, 0.22, 'sawtooth', 0.13); tone(90, 40, 0.25, 'triangle', 0.1, 0.02); },
+  die: () => { tone(520, 70, 0.26, 'square', 0.08); tone(880, 140, 0.2, 'triangle', 0.06, 0.03); },
+  word: () => { tone(660, 660, 0.06, 'sine', 0.09); tone(990, 990, 0.09, 'sine', 0.09, 0.06); },
+  shield: () => { tone(520, 520, 0.08, 'sine', 0.09); tone(784, 784, 0.14, 'sine', 0.09, 0.08); },
+  block: () => tone(340, 190, 0.09, 'triangle', 0.1),
+  build: () => { tone(300, 300, 0.06, 'triangle', 0.1); tone(450, 450, 0.06, 'triangle', 0.1, 0.07); tone(600, 600, 0.1, 'triangle', 0.1, 0.14); },
+  nope: () => tone(160, 160, 0.08, 'sine', 0.06),
+  wave: () => { tone(440, 440, 0.09, 'sine', 0.08); tone(660, 660, 0.12, 'sine', 0.08, 0.1); tone(880, 880, 0.16, 'sine', 0.08, 0.22); },
+};
+
+/* ───────────────────────── the world ───────────────────────── */
+const VW = 960, VH = 430;
+const AZ = -16;                                  // the camera turned so walkers face us as they come
+const LANES = [20, 62, 104], LW = 42;
+const BX0 = -48, BX1 = 480, BY0 = -10, BY1 = 134; // the board
+const KX = 0, KY = 62;                           // the keep's centre
+const PAD_X = 64, LINE_X = 104, STOP_X = 120, SPAWN_X = 432, GATE_X = 456;
+const COST = [25, 45, 70], RATE = [2.6, 1.8, 1.2], REACH = [240, 330, 420];
+
+const TYPES = {
+  runner: { hw: 6, foot: 2.6, body: [3, 13], head: null, speed: 21, dmg: 3, bounty: 2, atk: 1.3 },
+  walker: { hw: 8, foot: 3.2, body: [4, 19], head: [5, 19, 28], speed: 14.5, dmg: 5, bounty: 3, atk: 1.6 },
+  brute:  { hw: 12, foot: 4.2, body: [5, 26], head: [6, 26, 35], shoulders: true, speed: 9.5, dmg: 9, bounty: 6, atk: 2.0 },
+  herald: { hw: 8, foot: 3.2, body: [4, 19], head: [5, 19, 28], sign: true, speed: 10, dmg: 5, bounty: 6, atk: 1.8 },
+};
+
+const boardEl = $('board');
+inject(document);
+const svg = mk('svg', { viewBox: `0 0 ${VW} ${VH}`, 'aria-hidden': 'true' }, boardEl);
+
+// The camera: fitted once to the board, the keep and the gate, with room above for words.
+const C = Cam(AZ, 0.5, 1);
+const FRAME = [[BX0, BY0, -9], [BX1, BY0, -9], [BX0, BY1, -9], [BX1, BY1, -9], [KX, KY, 122], [GATE_X, BY0, 64], [GATE_X, BY1, 64], [SPAWN_X, LANES[0], 80]];
+{
+  fit(C, FRAME, 0, 0);
+  const P0 = proj(C); let a = 1e9, b = -1e9, c = 1e9, d = -1e9;
+  for (const p of FRAME) { const q = P0(...p); a = Math.min(a, q[0]); b = Math.max(b, q[0]); c = Math.min(c, q[1]); d = Math.max(d, q[1]); }
+  C.S = Math.min((VW - 36) / (b - a), (VH - 30) / (d - c));
+  fit(C, FRAME, VW / 2, VH / 2 + 8);
+}
+const P = proj(C), front = facing(C);
+const SA = Math.sin(rad(AZ)), CA = Math.cos(rad(AZ));
+const depth = (x, y) => x * SA + y * CA;          // larger is nearer: paint in ascending order
+const pct = (q) => [(q[0] / VW) * 100, (q[1] / VH) * 100];
+
+/** A ring moved by (dx, dy), its normals kept. */
+const shift = (ring, dx, dy) => ring.map((q) => ({ u: q.u + dx, v: q.v + dy, nu: q.nu, nv: q.nv }));
+/** A ring turned by `a` degrees about (cx, cy). */
+function turned(ring, cx, cy, a) {
+  const c = Math.cos(rad(a)), s = Math.sin(rad(a));
+  return ring.map((q) => ({ u: cx + q.u * c - q.v * s, v: cy + q.u * s + q.v * c, nu: q.nu * c - q.nv * s, nv: q.nu * s + q.nv * c }));
+}
+/** A round footprint and its crease, for turned parts: towers, drums. */
+const disc = (cx, cy, r, b, n = 14) => [rrect(cx - r, cy - r, cx + r, cy + r, r, n), rrect(cx - r + b, cy - r + b, cx + r - b, cy + r - b, r - b, n)];
+const block = (parent, ring, inner, z0, z1, cls) => { const s = solid(parent); put(s, prism(P, front, ring, inner, z0, z1)); if (cls) s.sil.setAttribute('class', cls); return s; };
+
+/* layers, back to front */
+const gBoard = mk('g', {}, svg), gKeepBack = mk('g', {}, svg), gKeep = mk('g', {}, svg), gKeepFront = mk('g', {}, svg);
+const gLive = mk('g', {}, svg), gFx = mk('g', {}, svg);
+
+/* ── the board, its lanes, the line and the gate ── */
+{
+  const [r0, r1] = rings(BX0, BY0, BX1, BY1, 14, 2.4);
+  block(gBoard, r0, r1, -9, 0);
+  for (const y of [LANES[0] + LW / 2, LANES[1] + LW / 2]) mk('path', { d: seg(P(PAD_X + 22, y, 0), P(GATE_X - 14, y, 0)), class: 'nf lo dash' }, gBoard);
+  mk('path', { d: seg(P(LINE_X, BY0 + 6, 0), P(LINE_X, BY1 - 6, 0)), class: 'nf dash' }, gBoard);
+  // the line's two stones, and lane marks: one, two, three dots on the board behind each pad
+  // the gate the walkers come through: four pillars, back to front, then the lintel across them
+  for (const y of [BY0 + 6, LANES[0] + LW / 2, LANES[1] + LW / 2, BY1 - 6]) { const [g0, g1] = rings(GATE_X - 6, y - 6, GATE_X + 6, y + 6, 3, 1); block(gBoard, g0, g1, 0, 56); }
+  const [l0, l1] = rings(GATE_X - 9, BY0, GATE_X + 9, BY1, 4, 1.4);
+  block(gBoard, l0, l1, 56, 64);
+}
+
+/* ── the keep: a plinth, two side towers, the great tower, a crown and a pennant ── */
+const keep = {};
+{
+  const [p0, p1] = rings(KX - 32, KY - 52, KX + 28, KY + 52, 10, 2);
+  block(gKeep, p0, p1, 0, 10);
+  const side = (y) => { const [a, b] = disc(KX - 8, y, 11, 1.4); block(gKeep, a, b, 10, 58); const [c, d] = disc(KX - 8, y, 13.5, 1.6); block(gKeep, c, d, 58, 64); };
+  side(KY - 38);
+  const [t0, t1] = disc(KX, KY, 22, 2);
+  block(gKeep, t0, t1, 10, 92);
+  // ten windows on the face we see: the keep's health, one window per ten
+  const face = Math.atan2(CA, SA) * 180 / Math.PI;
+  keep.windows = [];
+  for (const [z0, z1] of [[66, 76], [44, 54]]) for (const o of [-48, -24, 0, 24, 48]) {
+    const a = rad(face + o), x = KX + 22 * Math.cos(a), y = KY + 22 * Math.sin(a);
+    keep.windows.push(mk('path', { d: seg(P(x, y, z0), P(x, y, z1)), class: 'nf sil' }, gKeep));
+  }
+  const [c0, c1] = disc(KX, KY, 26, 2.2, 16);
+  keep.crown = block(gKeep, c0, c1, 92, 100);
+  const merl = []; for (let k = 0; k < 10; k++) { const a = rad(k * 36); merl.push([KX + 22.5 * Math.cos(a), KY + 22.5 * Math.sin(a)]); }
+  merl.sort((p, q) => depth(...p) - depth(...q));
+  for (const [x, y] of merl) { const [m0, m1] = rings(x - 3, y - 3, x + 3, y + 3, 1.3, 0.6); block(gKeep, m0, m1, 100, 105); }
+  const [f0, f1] = rings(KX - 0.8, KY - 0.8, KX + 0.8, KY + 0.8, 0.8, 0.3);
+  block(gKeep, f0, f1, 100, 124);
+  const [g0, g1] = rings(KX, KY - 0.7, KX + 15, KY + 0.7, 0.6, 0.25);
+  keep.pennant = block(gKeep, g0, g1, 115, 123);
+  side(KY + 38);
+  // the shield: three dashed rings round the keep, the far halves behind it, the near halves in front
+  keep.shield = [];
+  for (const [z, R] of [[2, 74], [46, 64], [92, 42], [118, 16]]) {
+    const ring = circ(R, 64).map((q) => ({ ...q, u: q.u + KX, v: q.v + KY }));
+    keep.shield.push(mk('path', { d: open(ringAt(P, run(ring, (q) => !front(q)), z)), class: 'nf dash', visibility: 'hidden' }, gKeepBack));
+    keep.shield.push(mk('path', { d: open(ringAt(P, run(ring, front), z)), class: 'nf dash', visibility: 'hidden' }, gKeepFront));
+  }
+}
+
+/* ── turrets: a pad on each lane; a turret rises on it when built ── */
+const turrets = LANES.map((ly, lane) => {
+  const g = mk('g', {}, gLive);
+  const [r0, r1] = rings(PAD_X - 12, ly - 12, PAD_X + 12, ly + 12, 4, 1);
+  block(g, r0, r1, 0, 1.8);
+  const lv = [0, 1, 2].map((k) => { const d = flatDot(g, C, 1.3, 'dot off'); place(d, P(PAD_X + 9, ly - 6 + 6 * k, 1.8)); return d; });
+  const parts = { base: solid(g), drum: solid(g), barrel: solid(g), cap: solid(g) };
+  for (const s of Object.values(parts)) s.g.setAttribute('visibility', 'hidden');
+  return { lane, x: PAD_X, y: ly, g, lv, parts, level: 0, cd: 0, h: tween(0), aim: spring(-12), recoil: spring(0, { k: 260, c: 22 }), d: depth(PAD_X, ly), drawn: '' };
+});
+function drawTurret(t, now) {
+  const h = tval(t.h, now);
+  if (t.level === 0 && h < 0.05) return false;
+  const z0 = 1.8, z1 = z0 + 2 + h, z2 = z1 + 8, a = t.aim.x, rc = t.recoil.x;
+  const key = `${h.toFixed(2)}|${a.toFixed(1)}|${rc.toFixed(2)}`;
+  if (key === t.drawn) return !tdone(t.h, now);
+  t.drawn = key;
+  const [b0, b1] = disc(t.x, t.y, 9, 1.2, 10); put(t.parts.base, prism(P, front, b0, b1, z0, z1));
+  const [d0, d1] = disc(t.x, t.y, 6.4, 1, 10); put(t.parts.drum, prism(P, front, d0, d1, z1, z2));
+  const L = 17 - rc * 4, bar = rrect(1, -1.8, L, 1.8, 1.5, 3), bin = rrect(1.6, -1.1, L - 0.6, 1.1, 0.8, 3);
+  put(t.parts.barrel, prism(P, front, turned(bar, t.x, t.y, a), turned(bin, t.x, t.y, a), z1 + 2.6, z1 + 6.2));
+  const [c0, c1] = disc(t.x, t.y, 3.8, 0.8, 8); put(t.parts.cap, prism(P, front, c0, c1, z2, z2 + 1.8));
+  // the barrel goes in front of the drum when it points at us, behind it when it points away
+  const toward = Math.cos(rad(a)) * SA + Math.sin(rad(a)) * CA > 0;
+  if (toward) t.parts.barrel.g.after(t.parts.drum.g); else t.parts.barrel.g.before(t.parts.drum.g);
+  return !tdone(t.h, now);
+}
+const tipOf = (t) => { const a = rad(t.aim.x), z = 1.8 + 2 + tval(t.h, performance.now()) + 4.4; return [t.x + 17 * Math.cos(a), t.y + 17 * Math.sin(a), z]; };
+
+/* line stones: two small posts, painted with the live layer since walkers stand behind the near one */
+const props = [BY0 + 4, BY1 - 4].map((y) => { const g = mk('g', {}, gLive); const [a, b] = rings(LINE_X - 3, y - 3, LINE_X + 3, y + 3, 1.4, 0.7); block(g, a, b, 0, 9); return { g, d: depth(LINE_X, y) }; });
+
+/* ───────────────────────── HTML overlays ───────────────────────── */
+const labelsEl = $('labels'), fieldEl = $('field');
+const padTags = turrets.map((t) => {
+  const el = document.createElement('button');
+  el.type = 'button'; el.className = 'padtag'; el.style.pointerEvents = 'auto'; el.style.background = 'none'; el.style.border = '0'; el.style.padding = '2px 4px';
+  const [x, y] = pct(P(t.x - 24, t.y + 2, 0)); el.style.left = x + '%'; el.style.top = y + '%';
+  el.addEventListener('click', () => build(t.lane));
+  labelsEl.appendChild(el); return el;
+});
+function floatText(world, text, bad = false) {
+  const el = document.createElement('div'); el.className = 'float' + (bad ? ' bad' : ''); el.textContent = text;
+  const [x, y] = pct(P(...world)); el.style.left = x + '%'; el.style.top = y + '%';
+  labelsEl.appendChild(el); setTimeout(() => el.remove(), 850);
+}
+
+/* ───────────────────────── game state ───────────────────────── */
+let G = null, target = null, uid = 0;
+function fresh() {
+  return { running: false, paused: false, over: false, t: 0, playT: 0, wave: 0, toSpawn: 0, spawnT: 0, interval: 2.5, speedMul: 1, inter: 0,
+    hp: 100, ink: 25, score: 0, streak: 0, bestStreak: 0, cleanRun: 0, shield: 0, correct: 0, wrong: 0, kills: 0,
+    enemies: [], bolts: [], shards: [], ripples: [] };
+}
+G = fresh();
+
+/* ── walkers ── */
+function partsOf(T) {
+  // [kind, x0, y0, x1, y1, z0, z1, r, b], centred on the walker; listed back to front (sign behind, far side first)
+  const hw = T.hw, list = [];
+  if (T.sign) { list.push(['post', 6.4, -0.9, 8.2, 0.9, 10, 46, 0.8, 0.3]); list.push(['sign', 6.8, -13, 8.6, 13, 32, 46, 0.8, 0.3]); }
+  const f = T.foot;
+  list.push(['footL', -f, -hw + 0.5, f, -hw + 0.5 + f * 1.4, 0, 4, 1.2, 0.5]);
+  list.push(['footR', -f, hw - 0.5 - f * 1.4, f, hw - 0.5, 0, 4, 1.2, 0.5]);
+  if (T.shoulders) list.push(['shL', -5, -hw - 6, 5, -hw + 3, T.body[1] - 9, T.body[1] + 2, 3, 1]);
+  list.push(['body', -hw, -hw, hw, hw, T.body[0], T.body[1], hw * 0.42, 1.2]);
+  if (T.head) { const hh = T.head[0]; list.push(['head', -hh, -hh, hh, hh, T.head[1], T.head[2], hh * 0.45, 0.9]); }
+  if (T.shoulders) list.push(['shR', -5, hw - 3, 5, hw + 6, T.body[1] - 9, T.body[1] + 2, 3, 1]);
+  return list.map(([kind, x0, y0, x1, y1, z0, z1, r, b]) => { const [ring, inner] = rings(x0, y0, x1, y1, r, b); return { kind, ring, inner, z0, z1 }; });
+}
+const TEMPLATES = Object.fromEntries(Object.entries(TYPES).map(([k, T]) => [k, partsOf(T)]));
+
+function chooseType(w) {
+  const wts = { runner: 0.32, walker: 0.5, brute: w >= 2 ? Math.min(0.32, 0.04 + 0.04 * w) : 0, herald: w >= 3 ? Math.min(0.2, 0.04 + 0.025 * w) : 0 };
+  let s = Object.values(wts).reduce((a, b) => a + b, 0) * Math.random();
+  for (const [k, v] of Object.entries(wts)) { if ((s -= v) <= 0) return k; }
+  return 'walker';
+}
+function chooseWord(type, w) {
+  const pool = type === 'herald' ? LINES : type === 'runner' ? SHORT : type === 'brute' ? (w >= 4 ? LONG : MID) : (w <= 2 ? SHORT.concat(MID.filter((m) => m.length <= 6)) : w <= 5 ? MID : MID.concat(LONG));
+  const used = new Set(G.enemies.filter((e) => !e.dying).map((e) => e.word[0]));
+  for (let i = 0; i < 40; i++) { const wd = pick(pool); if (!used.has(wd[0]) && !G.enemies.some((e) => e.word === wd)) return wd; }
+  return pick(pool);
+}
+function spawn() {
+  const type = chooseType(G.wave), T = TYPES[type];
+  const free = [0, 1, 2].filter((l) => !G.enemies.some((e) => e.lane === l && e.x > SPAWN_X - 34));
+  if (!free.length) return false;
+  const lane = pick(free), word = chooseWord(type, G.wave);
+  const g = mk('g', {}, gLive);
+  const ringEl = mk('path', { class: 'nf dash', visibility: 'hidden' }, g);
+  const parts = TEMPLATES[type].map((p) => ({ ...p, s: solid(g) }));
+  const visor = mk('path', { class: 'nf' }, g);
+  const bubble = document.createElement('div'); bubble.className = 'bubble' + (type === 'herald' ? ' line' : ''); labelsEl.appendChild(bubble);
+  const e = { id: ++uid, type, T, lane, x: SPAWN_X, y: LANES[lane] + rand(-3, 3), word, marks: Array(word.length).fill(''), pos: 0, end: word.length, clean: true,
+    speed: T.speed * G.speedMul * rand(0.92, 1.08), phase: rand(0, 6), drop: tween(70), atk: T.atk * 0.6, dying: false, g, ringEl, parts, visor, bubble, dirty: true, flash: 0 };
+  tset(e.drop, 0, performance.now(), 0);
+  G.enemies.push(e);
+  return true;
+}
+function drawEnemy(e, now) {
+  const T = e.T, ph = e.phase, dz = tval(e.drop, now);
+  const lift = (s) => Math.max(0, Math.sin(s)) * T.foot * 0.9;
+  const bob = Math.abs(Math.sin(ph)) * 1.1 + dz;
+  for (const p of e.parts) {
+    const dzp = p.kind === 'footL' ? lift(ph) + dz : p.kind === 'footR' ? lift(ph + Math.PI) + dz : bob;
+    put(p.s, prism(P, front, shift(p.ring, e.x, e.y), shift(p.inner, e.x, e.y), p.z0 + dzp, p.z1 + dzp));
+  }
+  const top = T.head || [T.hw * 0.6, T.body[0], T.body[1]], hz = (top[1] + top[2]) / 2 + 1 + bob, fx = e.x - top[0];
+  e.visor.setAttribute('d', seg(P(fx, e.y - top[0] * 0.55, hz), P(fx, e.y + top[0] * 0.55, hz)));
+  if (e === target) { const rr = circ(T.hw + 7, 40).map((q) => ({ ...q, u: q.u + e.x, v: q.v + e.y })); e.ringEl.setAttribute('d', poly(ringAt(P, rr, 0))); }
+}
+function setLit(e, on) {
+  for (const p of e.parts) p.s.sil.classList.toggle('hi', on);
+  e.visor.setAttribute('class', on ? 'nf hi' : 'nf');
+  e.ringEl.setAttribute('visibility', on ? 'visible' : 'hidden');
+  e.bubble.classList.toggle('target', on);
+}
+const headOf = (e) => [e.x - 2, e.y, (e.T.head ? e.T.head[2] : e.T.body[1]) - 4];
+const topOf = (e) => (e.T.sign ? 46 : e.T.head ? e.T.head[2] : e.T.body[1]) + 7 + tval(e.drop, performance.now());
+
+/* ── bolts, shards, ripples ── */
+function bolt(from, to, dur, arc, cls, r, onHit) { const el = mk('circle', { r, class: cls }, gFx); G.bolts.push({ from, to, dur, arc, t: 0, el, onHit }); }
+function shards(e, n, big = false) {
+  for (let i = 0; i < n; i++) {
+    const s = big ? rand(2.2, 4) : rand(1.2, 2), [a, b] = rings(-s, -s, s, s, s * 0.4, s * 0.25), ang = rand(0, Math.PI * 2), sp = rand(18, big ? 70 : 34);
+    G.shards.push({ x: e.x + rand(-4, 4), y: e.y + rand(-4, 4), z: rand(6, big ? 26 : 18), vx: Math.cos(ang) * sp + (big ? 20 : 0), vy: Math.sin(ang) * sp, vz: rand(30, 80), a, b, s, life: rand(0.6, 1.0), el: solid(gFx) });
+  }
+}
+function ripple(x, y) { const el = mk('path', { class: 'nf dash' }, gFx); G.ripples.push({ x, y, t: 0, el }); }
+
+/* ───────────────────────── typing ───────────────────────── */
+function retarget(t) { if (target && target !== t && G.enemies.includes(target)) setLit(target, false); target = t; if (t) setLit(t, true); renderTarget(); }
+function nearest(list) { return list.reduce((m, e) => (!m || e.x < m.x ? e : m), null); }
+const live = () => G.enemies.filter((e) => !e.dying);
+
+function handleChar(ch) {
+  if (!G.running || G.paused) return;
+  let t = target && !target.dying ? target : null;
+  if (!t || t.pos === 0) {
+    const pool = live();
+    if (!(t && t.word[0] === ch)) {
+      const m = nearest(pool.filter((e) => e.pos === 0 && e.word[0] === ch));
+      if (m) t = m; else if (!t) t = nearest(pool);
+    }
+  }
+  if (!t) { feed('nothing on the field yet'); return; }
+  if (t !== target) retarget(t);
+  const want = t.word[t.pos], i = t.pos, now = performance.now();
+  if (ch === want) {
+    t.marks[i] = 'ok'; G.correct++; G.streak++; G.bestStreak = Math.max(G.bestStreak, G.streak); G.ink += 1;
+    G.score += 10 * mult();
+    SFX.shoot();
+    const last = t.pos + 1 >= t.end;
+    bolt([KX + 2, KY, 106], headOf(t), 0.26, 26, 'dot', 2.6, () => { t.flash = 0.12; SFX.hit(); if (last) explode(t, 'hero'); else shards(t, 2); });
+  } else {
+    t.marks[i] = 'bad'; t.clean = false; G.wrong++; G.streak = 0; G.cleanRun = 0;
+    if (G.shield > 0) { G.shield = 0; feed('<span class="bad">typo — the shield drops</span>'); } else feed(`<span class="bad">typo</span> — wanted <b>${want === ' ' ? '␣' : want}</b>, got <b>${ch === ' ' ? '␣' : ch}</b>`);
+    SFX.wrong();
+    setTimeout(() => SFX.eshoot(), 60);
+    bolt(headOf(t), [KX + 8, KY, 64], 0.55, 22, 'dot m', 3, () => damage(3, 'typo'));
+    floatText(headOf(t), '✕', true);
+  }
+  t.pos++; t.dirty = true;
+  if (t.pos >= t.end) finishWord(t);
+  renderTarget(); hud();
+  void now;
+}
+function finishWord(t) {
+  t.dying = true; t.bubble.classList.add('dying');
+  if (t.clean) {
+    G.cleanRun++; G.hp = Math.min(100, G.hp + 2); G.ink += 3; G.score += 25 * mult();
+    if (G.cleanRun % 2 === 0) { const was = G.shield; G.shield = 3; if (!was) { SFX.shield(); feed('<b>shield up</b> — two clean words · soaks three hits · drops on a typo'); } }
+    else feed(`<b>clean</b> · +2 keep · +3 ink`);
+  } else feed('word done — with typos, no heal');
+  G.score += t.word.length * 5 * mult();
+  SFX.word();
+  if (target === t) { target = null; renderTarget(); }
+  t.dieAt = G.t + 0.6;
+}
+const mult = () => Math.min(5, 1 + Math.floor(G.streak / 15));
+
+function explode(e, by) {
+  if (!G.enemies.includes(e)) return;
+  G.enemies = G.enemies.filter((x) => x !== e);
+  shards(e, e.type === 'brute' ? 12 : 8, true); ripple(e.x, e.y);
+  G.kills++; G.ink += e.T.bounty;
+  floatText([e.x, e.y, topOf(e)], `+${e.T.bounty} ink`);
+  if (target === e) { target = null; renderTarget(); }
+  e.g.remove(); setTimeout(() => e.bubble.remove(), 260);
+  SFX.die(); hud(); void by;
+}
+
+function damage(n, why) {
+  if (!G.running) return;
+  if (G.shield > 0) { G.shield--; SFX.block(); floatText([KX, KY, 112], G.shield ? 'blocked' : 'shield down'); hud(); return; }
+  G.hp = Math.max(0, G.hp - n); SFX.hurt();
+  floatText([KX + 4, KY, 100], `−${n}`, true);
+  fieldEl.classList.remove('shake'); void fieldEl.offsetWidth; if (!reducedMotion()) fieldEl.classList.add('shake');
+  hud(); void why;
+  if (G.hp <= 0) gameOver();
+}
+
+/* ── turrets ── */
+function build(lane) {
+  const t = turrets[lane];
+  if (!G.running || G.paused) return;
+  if (t.level >= 3) { SFX.nope(); feed(`turret ${lane + 1} is at full level`); return; }
+  const cost = COST[t.level];
+  if (G.ink < cost) { SFX.nope(); feed(`turret ${lane + 1} needs <b>${cost}</b> ink — you have ${G.ink}`); return; }
+  G.ink -= cost; t.level++; t.cd = 0.6;
+  for (const s of Object.values(t.parts)) s.g.setAttribute('visibility', 'visible');
+  tset(t.h, [0, 6, 12, 19][t.level], performance.now(), 0);
+  t.lv.forEach((d, k) => d.setAttribute('class', 'dot ' + (k < t.level ? 'm' : 'off')));
+  SFX.build(); feed(`turret <b>${lane + 1}</b> → level ${t.level}`);
+  floatText([t.x, t.y, 30], `L${t.level}`);
+  hud();
+}
+function turretTick(t, dt) {
+  if (!t.level) return;
+  const cands = G.enemies.filter((e) => e.lane === t.lane && !e.dying && e.x < PAD_X + REACH[t.level - 1] && e.x < SPAWN_X - 6 && e.end - e.pos > 0);
+  const e = nearest(cands);
+  if (e) t.aim.t = Math.atan2(e.y - t.y, e.x - t.x) * 180 / Math.PI;
+  t.cd -= dt;
+  if (t.cd > 0 || !e) return;
+  t.cd = RATE[t.level - 1];
+  t.recoil.x = 1; t.recoil.v = 0;
+  e.end--; e.marks[e.end] = 'cut'; e.dirty = true;
+  const kill = e.pos >= e.end;
+  if (kill) { e.dying = true; e.bubble.classList.add('dying'); e.dieAt = G.t + 0.6; if (target === e) { target = null; renderTarget(); } }
+  else if (e === target) renderTarget();
+  SFX.turret();
+  bolt(tipOf(t), headOf(e), 0.2, 4, 'dot', 2, () => { shards(e, 2); if (kill) explode(e, 'turret'); });
+}
+
+/* ── waves ── */
+function startWave(w) {
+  G.wave = w; G.toSpawn = Math.min(30, 5 + 2 * w); G.interval = Math.max(0.8, 2.6 - 0.16 * (w - 1)); G.speedMul = 1 + 0.055 * (w - 1); G.spawnT = 0.4; G.inter = 0;
+  banner(`Wave ${w}`, w === 3 ? 'heralds carry whole lines — spaces count' : w === 2 ? 'brutes join — long words, heavy blows' : ''); SFX.wave();
+  setTimeout(() => { if (G.inter === 0 && G.wave === w) banner(null); }, 1800);
+  hud();
+}
+function waveClear() {
+  const bonus = 10 + 2 * G.wave; G.ink += bonus; G.inter = 6;
+  banner(`Wave ${G.wave} held · +${bonus} ink`, 'build with 1 · 2 · 3 — next wave in 6');
+  hud();
+}
+
+/* ───────────────────────── the loop ───────────────────────── */
+let lastLabelW = 0, fontU = 13;
+function tick(dtRaw, now) {
+  const dt = Math.min(0.05, dtRaw);
+  let moving = false;
+  if (G.running && !G.paused) {
+    moving = true; G.t += dt;
+    if (G.inter > 0) {
+      const before = Math.ceil(G.inter); G.inter -= dt;
+      if (Math.ceil(G.inter) !== before && G.inter > 0) { if (G.wave) banner(`Wave ${G.wave} held`, `build with 1 · 2 · 3 — next wave in ${Math.ceil(G.inter)}`); else banner(`Wave 1 in ${Math.ceil(G.inter)}`, 'you have 25 ink — press 1, 2 or 3 to build a turret'); }
+      if (G.inter <= 0) startWave(G.wave + 1);
+    } else {
+      G.playT += dt;
+      if (G.toSpawn > 0) { G.spawnT -= dt; if (G.spawnT <= 0 && spawn()) { G.toSpawn--; G.spawnT = G.interval * rand(0.75, 1.25); } }
+      else if (!G.enemies.length) waveClear();
+    }
+    // walkers march, queue behind each other, and batter the keep from the line
+    const byLane = [[], [], []]; G.enemies.forEach((e) => byLane[e.lane].push(e));
+    byLane.forEach((l) => l.sort((a, b) => a.x - b.x));
+    for (const l of byLane) l.forEach((e, i) => {
+      if (e.dieAt && G.t > e.dieAt) { explode(e, 'late'); return; }
+      if (!tdone(e.drop, now)) return;
+      const ahead = l[i - 1], stopAt = ahead ? Math.max(STOP_X, ahead.x + ahead.T.hw + e.T.hw + 8) : STOP_X;
+      if (e.x > stopAt) { e.x = Math.max(stopAt, e.x - e.speed * dt); e.phase += dt * e.speed * 0.32; }
+      else if (Math.sin(e.phase) > 0.05 || Math.sin(e.phase) < -0.05) e.phase += dt * 6;
+      if (!e.dying && e.x <= STOP_X + 0.5) {
+        e.atk -= dt;
+        if (e.atk <= 0) { e.atk = e.T.atk; SFX.eshoot(); bolt(headOf(e), [KX + 8, KY, 60], 0.5, 18, 'dot m', 3, () => damage(e.T.dmg, 'line')); }
+      }
+    });
+    turrets.forEach((t) => turretTick(t, dt));
+  }
+  // springs and tweens: turret aim and recoil, turret rise
+  for (const t of turrets) { const a = stepS(t.aim, dt), r = stepS(t.recoil, dt); if (drawTurret(t, now) || a || r) moving = true; }
+  for (const e of G.enemies) { drawEnemy(e, now); e.flash = Math.max(0, e.flash - dt); }
+  // paint order for the live layer: far to near
+  const items = [...turrets.map((t) => ({ g: t.g, d: t.d })), ...props, ...G.enemies.map((e) => ({ g: e.g, d: depth(e.x, e.y) }))].sort((a, b) => a.d - b.d);
+  let prev = null;
+  for (const it of items) { if (prev ? prev.nextSibling !== it.g : gLive.firstChild !== it.g) { if (prev) prev.after(it.g); else gLive.prepend(it.g); } prev = it.g; }
+  // bolts
+  G.bolts = G.bolts.filter((b) => {
+    b.t += dt / b.dur; const k = Math.min(1, b.t);
+    const q = [lerp(b.from[0], b.to[0], k), lerp(b.from[1], b.to[1], k), lerp(b.from[2], b.to[2], k) + Math.sin(Math.PI * k) * b.arc];
+    place(b.el, P(...q));
+    if (k >= 1) { b.el.remove(); b.onHit && b.onHit(); return false; }
+    return true;
+  });
+  // shards fall, bounce once or twice, and go
+  G.shards = G.shards.filter((s) => {
+    s.life -= dt; s.vz -= 220 * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
+    if (s.z < 0) { s.z = 0; s.vz *= -0.35; s.vx *= 0.6; s.vy *= 0.6; }
+    if (s.life <= 0) { s.el.g.remove(); return false; }
+    const k = Math.min(1, s.life / 0.3), sc = s.s * k;
+    put(s.el, prism(P, front, shift(s.a.map((q) => ({ ...q, u: q.u * k, v: q.v * k })), s.x, s.y), shift(s.b.map((q) => ({ ...q, u: q.u * k, v: q.v * k })), s.x, s.y), s.z, s.z + sc * 2));
+    return true;
+  });
+  G.ripples = G.ripples.filter((r) => {
+    r.t += dt / 0.55; if (r.t >= 1) { r.el.remove(); return false; }
+    const R = 8 + 26 * Math.sin(r.t * Math.PI / 2), rr = circ(R, 40).map((q) => ({ ...q, u: q.u + r.x, v: q.v + r.y }));
+    r.el.setAttribute('d', poly(ringAt(P, rr, 0))); r.el.setAttribute('class', r.t > 0.6 ? 'nf lo dash' : 'nf dash');
+    return true;
+  });
+  if (G.bolts.length || G.shards.length || G.ripples.length) moving = true;
+  layoutLabels(now);
+  return moving;
+}
+const loop = register(boardEl, tick);
+
+/* ───────────────────────── labels ───────────────────────── */
+function bubbleHTML(e) {
+  const isT = e === target;
+  return e.word.split('').map((c, i) => {
+    const m = e.marks[i], ch = c === ' ' ? '␣' : c;
+    const cls = m === 'ok' ? 'ok' : m === 'bad' ? 'bad' : m === 'cut' ? 'cut' : isT && i === e.pos ? 'cur' : '';
+    return `<span class="${cls}${c === ' ' ? ' sp' : ''}">${ch}</span>`;
+  }).join('');
+}
+function layoutLabels(now) {
+  const W = fieldEl.clientWidth || 960;
+  if (W !== lastLabelW) { lastLabelW = W; fontU = (clamp(W * 0.0132, W < 560 ? 9 : 10, 15) * VW) / W; }
+  const cw = fontU * 0.61, h = fontU * 1.7 + 2;
+  const list = G.enemies.slice().sort((a, b) => (a === target ? -1 : b === target ? 1 : a.x - b.x));
+  const placed = [];
+  for (const e of list) {
+    if (e.dirty) { e.bubble.innerHTML = bubbleHTML(e); e.dirty = false; }
+    const q = P(e.x, e.y, topOf(e)), w = e.word.length * cw + fontU + 4;
+    let x = q[0], y = q[1];
+    for (let n = 0; n < 10; n++) {
+      const hit = placed.find((r) => Math.abs(r.x - x) < (r.w + w) / 2 + 2 && Math.abs(r.y - y) < h);
+      if (!hit) break;
+      y = hit.y - h - 1;
+    }
+    y = Math.max(h + 2, y);
+    placed.push({ x, y, w });
+    e.bubble.style.left = (x / VW) * 100 + '%'; e.bubble.style.top = (y / VH) * 100 + '%';
+  }
+  void now;
+}
+
+/* ───────────────────────── UI ───────────────────────── */
+const ui = { hpFill: $('hpFill'), hpText: $('hpText'), hpWrap: $('hpWrap'), shield: $('shieldText'), ink: $('hudInk'), score: $('hudScore'), wave: $('hudWave'), acc: $('hudAcc'), wpm: $('hudWpm'), combo: $('hudCombo'), target: $('target'), feed: $('feed'), read: $('readout'), banner: $('banner') };
+const buildBtns = [...document.querySelectorAll('.build')];
+let lastInk = -1;
+function hud() {
+  ui.hpFill.style.width = G.hp + '%'; ui.hpText.textContent = Math.ceil(G.hp); ui.hpWrap.setAttribute('aria-valuenow', Math.ceil(G.hp)); ui.hpWrap.classList.toggle('low', G.hp <= 30);
+  ui.shield.textContent = G.shield ? `shield up · ${G.shield} hit${G.shield > 1 ? 's' : ''} left` : `shield · ${G.cleanRun % 2}/2 clean`;
+  ui.shield.classList.toggle('up', G.shield > 0);
+  if (G.ink !== lastInk) { ui.ink.textContent = G.ink; if (G.ink > lastInk && lastInk >= 0) { ui.ink.classList.remove('bump'); void ui.ink.offsetWidth; ui.ink.classList.add('bump'); } lastInk = G.ink; }
+  ui.score.textContent = G.score.toLocaleString(); ui.wave.textContent = G.wave || '—';
+  const tot = G.correct + G.wrong; ui.acc.textContent = tot ? Math.round((G.correct / tot) * 100) + '%' : '100%';
+  ui.wpm.textContent = G.playT > 3 ? Math.round(G.correct / 5 / (G.playT / 60)) : 0;
+  ui.combo.textContent = `×${mult()}` + (G.streak ? ` · ${G.streak}` : '');
+  keep.shield.forEach((p) => p.setAttribute('visibility', G.shield ? 'visible' : 'hidden'));
+  keep.windows.forEach((wEl, i) => wEl.setAttribute('class', i < Math.ceil(G.hp / 10) ? 'nf sil' : 'nf lo'));
+  turrets.forEach((t, i) => {
+    const max = t.level >= 3, cost = COST[t.level], can = !max && G.ink >= cost && G.running;
+    const b = buildBtns[i]; b.querySelector('.b-lv').textContent = t.level ? 'L' + t.level : '—'; b.querySelector('.b-cost').textContent = max ? 'max' : cost;
+    b.classList.toggle('can', can); b.classList.toggle('max', max);
+    b.setAttribute('aria-label', max ? `Turret ${i + 1}, level 3, full` : `Turret ${i + 1}: ${t.level ? 'upgrade to level ' + (t.level + 1) : 'build'} for ${cost} ink`);
+    padTags[i].innerHTML = `<kbd>${i + 1}</kbd> ${max ? 'max' : cost}`; padTags[i].classList.toggle('can', can);
+  });
+  // with no target, the keep's pennant takes the bright edge: where the eye should start
+  keep.pennant.sil.classList.toggle('hi', !target);
+}
+function renderTarget() {
+  const t = target;
+  if (!t) { ui.target.innerHTML = `<span class="empty">${G.running ? (G.inter > 0 ? '— build phase —' : 'type any word’s first letter') : '—'}</span>`; ui.read.textContent = G.running ? 'no target' : 'rest'; keep.pennant.sil.classList.add('hi'); return; }
+  ui.target.innerHTML = t.word.split('').map((c, i) => { const m = t.marks[i], ch = c === ' ' ? '␣' : c; return `<span class="${m === 'ok' ? 'ok' : m === 'bad' ? 'bad' : m === 'cut' ? 'cut' : i === t.pos ? 'cur' : 'rest'}">${ch}</span>`; }).join('');
+  ui.read.textContent = `${t.type} · lane ${t.lane + 1}`;
+  keep.pennant.sil.classList.remove('hi');
+  t.dirty = true;
+  for (const e of G.enemies) if (e !== t && e.bubble.classList.contains('target')) setLit(e, false);
+}
+function feed(html) { ui.feed.innerHTML = html; }
+function banner(title, sub) { if (!title) { ui.banner.hidden = true; return; } ui.banner.hidden = false; ui.banner.innerHTML = title + (sub ? ` <small>· ${sub}</small>` : ''); }
+
+/* ── run lifecycle ── */
+function clearField() {
+  for (const e of G.enemies) { e.g.remove(); e.bubble.remove(); }
+  for (const b of G.bolts) b.el.remove(); for (const s of G.shards) s.el.g.remove(); for (const r of G.ripples) r.el.remove();
+  turrets.forEach((t) => { t.level = 0; t.cd = 0; tset(t.h, 0, performance.now(), 0); t.lv.forEach((d) => d.setAttribute('class', 'dot off')); setTimeout(() => { if (!t.level) for (const s of Object.values(t.parts)) s.g.setAttribute('visibility', 'hidden'); }, 750); });
+}
+function start() {
+  clearField(); G = fresh(); target = null; lastInk = -1;
+  G.running = true;
+  $('menu').hidden = true; $('over').hidden = true; $('pause').hidden = true;
+  $('btnPause').disabled = false;
+  G.wave = 0; G.inter = 5; banner('Wave 1 in 5', 'you have 25 ink — press 1, 2 or 3 to build a turret');
+  feed('type the first letter of any word to lock on — <b>1 · 2 · 3</b> build turrets');
+  renderTarget(); hud(); loop.wake(); audio();
+  focusTyping();
+}
+function gameOver() {
+  G.running = false; G.over = true; $('btnPause').disabled = true; banner(null);
+  const best = Math.max(+store.get('best', 0), G.score); store.set('best', best);
+  const tot = G.correct + G.wrong;
+  $('stats').innerHTML = [['Score', G.score.toLocaleString()], ['Wave', G.wave], ['Walkers down', G.kills], ['Accuracy', tot ? Math.round((G.correct / tot) * 100) + '%' : '—'], ['Speed', (G.playT > 3 ? Math.round(G.correct / 5 / (G.playT / 60)) : 0) + ' wpm'], ['Best combo', G.bestStreak]]
+    .map(([k, v]) => `<div><span class="cap">${k}</span><b>${v}</b></div>`).join('') + `<div class="best"><span class="cap">Best score</span><b>${best.toLocaleString()}</b></div>`;
+  $('over').hidden = false; SFX.die();
+  feed('the keep has fallen — <b>Enter</b> to play again');
+}
+function pause(force) {
+  if (!G.running) return;
+  G.paused = force ?? !G.paused;
+  $('pause').hidden = !G.paused; $('btnPause').textContent = G.paused ? '▶ RESUME' : 'Ⅱ PAUSE';
+  if (!G.paused) { loop.wake(); focusTyping(); }
+}
+
+/* ── input ── */
+const mobileInput = $('mobileInput');
+function focusTyping() { if (matchMedia('(hover: none)').matches) mobileInput.focus({ preventScroll: true }); }
+addEventListener('keydown', (ev) => {
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (ev.target === mobileInput && ev.key !== 'Escape' && ev.key !== 'Enter') return;
+  const helpOpen = !$('help').hidden;
+  if (ev.key === 'Escape') { ev.preventDefault(); if (helpOpen) closeHelp(); else pause(); return; }
+  if (helpOpen) return;
+  if (ev.key === 'Enter') { if (!G.running && document.activeElement?.tagName !== 'BUTTON') { ev.preventDefault(); start(); } return; }
+  if (!G.running || G.paused) return;
+  if (ev.key === '1' || ev.key === '2' || ev.key === '3') { ev.preventDefault(); build(+ev.key - 1); return; }
+  if (ev.key === 'Backspace') { ev.preventDefault(); feed('no backspace — every key counts and moves on'); return; }
+  if (ev.key.length === 1 && /[a-z ]/i.test(ev.key)) { ev.preventDefault(); handleChar(ev.key.toLowerCase()); }
+});
+mobileInput.addEventListener('input', () => {
+  const v = mobileInput.value; mobileInput.value = '';
+  for (const c of v.toLowerCase()) { if (/[1-3]/.test(c)) build(+c - 1); else if (/[a-z ]/.test(c)) handleChar(c); }
+});
+$('btnKeyboard').addEventListener('click', () => mobileInput.focus());
+$('btnStart').addEventListener('click', start);
+$('btnAgain').addEventListener('click', start);
+$('btnResume').addEventListener('click', () => pause(false));
+$('btnPause').addEventListener('click', () => pause());
+buildBtns.forEach((b, i) => b.addEventListener('click', () => { build(i); focusTyping(); }));
+document.addEventListener('visibilitychange', () => { if (document.hidden && G.running && !G.paused) pause(true); });
+
+/* sound & theme */
+const btnSound = $('btnSound');
+const renderSound = () => { btnSound.textContent = soundOn ? '♪ ON' : '♪ OFF'; btnSound.classList.toggle('off', !soundOn); btnSound.setAttribute('aria-pressed', String(soundOn)); btnSound.title = soundOn ? 'Sound on — click to mute' : 'Sound off — click to unmute'; };
+btnSound.addEventListener('click', () => { soundOn = !soundOn; store.set('sound', soundOn ? 'on' : 'off'); if (!soundOn && AC) AC.suspend(); else SFX.word(); renderSound(); });
+renderSound();
+const root = document.documentElement;
+const savedTheme = store.get('theme', '');
+if (savedTheme === 'light' || savedTheme === 'dark') root.dataset.theme = savedTheme;
+const isDark = () => (root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches);
+const renderTheme = () => { $('btnTheme').textContent = isDark() ? '☀ LIGHT' : '☾ DARK'; };
+$('btnTheme').addEventListener('click', () => { root.dataset.theme = isDark() ? 'light' : 'dark'; store.set('theme', root.dataset.theme); renderTheme(); });
+renderTheme();
+
+/* help */
+function openHelp() { $('help').hidden = false; $('helpBack').hidden = false; if (G.running && !G.paused) pause(true); $('btnHelpClose').focus(); }
+function closeHelp() { $('help').hidden = true; $('helpBack').hidden = true; $('btnHelp').focus(); }
+$('btnHelp').addEventListener('click', openHelp);
+$('btnHelpClose').addEventListener('click', closeHelp);
+$('helpBack').addEventListener('click', closeHelp);
+
+/* best score on the menu */
+{ const best = +store.get('best', 0); $('bestLine').textContent = best ? `Best score · ${best.toLocaleString()}` : 'Press Enter to start. Esc pauses.'; }
+
+/* ───────────────────────── the menu figure (made with hairline-create) ───────────────────────── */
+window.hairline = (fig) => {
+  const stage = $('menuFig');
+  stage.setAttribute('data-hairline', fig.name); stage.setAttribute('role', 'img'); stage.setAttribute('aria-label', fig.means);
+  const fsvg = mk('svg', { viewBox: '0 0 400 320', 'aria-hidden': 'true' }, stage);
+  const out = $('menuRead');
+  const read = { _t: 'rest', get textContent() { return this._t; }, set textContent(v) { this._t = String(v ?? ''); out.textContent = this._t; } };
+  fig.mount({ stage, svg: fsvg, read }, fig.range[1]);
+  HL.tour(stage, fig.tour || HL.LAP);
+};
+
+hud(); renderTarget();
+
+</script>
+<script type="module">
+/**
+ * Keep: a round keep on a plate, with three turret pads in front of it. The
+ * pad under the pointer raises its turret and swings its barrel out to the
+ * field; the other two sink back, staggered outwards from the one chosen. Each
+ * pad is numbered with dots on the plate in front of it (one, two, three).
+ * At rest the middle turret stands half raised and the keep's crown is bright.
+ * The slider is how high a chosen turret stands, in world units.
+ *
+ * The pattern: one of many. Tweens, a stagger by distance, a hit test on the
+ * pads' rest centres, and identity carried by dots.
+ */
+const {
+  Cam, clamp, facing, fit, prism, proj, rad, rings, rrect, seg, mk, solid, put,
+  flatDot, place, pointer, register, disposer, tween, tset, tval, tdone,
+} = HL;
+
+const PADS = [[-6, 60], [28, 60], [62, 60]], PAD = 11;
+const REST = [5, 12, 3], LOW = 0, AIM = [-22, 8, 40], AIM_REST = [-40, 18, 30];
+
+/** A round ring of n steps, for parts that read as turned: towers and drums. */
+const disc = (cx, cy, r, b, n = 14) => [rrect(cx - r, cy - r, cx + r, cy + r, r, n), rrect(cx - r + b, cy - r + b, cx + r - b, cy + r - b, r - b, n)];
+
+/** A ring turned by `a` degrees about (cx, cy): points and their normals both turn. */
+function turned(ring, cx, cy, a) {
+  const c = Math.cos(rad(a)), s = Math.sin(rad(a));
+  return ring.map((q) => ({ u: cx + q.u * c - q.v * s, v: cy + q.u * s + q.v * c, nu: q.nu * c - q.nv * s, nv: q.nu * s + q.nv * c }));
+}
+
+function mount({ stage, svg, read }, value) {
+  const bag = disposer();
+  let lift = value;
+
+  const C = Cam(45, 0.5, 1.72);
+  fit(C, [[-26, -18, -6], [92, 84, -6], [92, -18, -6], [-26, 84, -6], [36, 12, 70], [62, 60, 44]], 200, 162);
+  const P = proj(C), front = facing(C);
+  const g = mk("g", {}, svg);
+
+  // the plate, and the keep standing at its back
+  const [br, bi] = rings(-26, -18, 92, 84, 12, 2.2);
+  put(solid(g), prism(P, front, br, bi, -6, 0));
+  const [pr, pi] = rings(12, -10, 60, 34, 8, 1.6);
+  put(solid(g), prism(P, front, pr, pi, 0, 8));
+  const tower = disc(36, 12, 15, 1.8);
+  put(solid(g), prism(P, front, tower[0], tower[1], 8, 58));
+  // a door on the tower's face toward the pads, and the arrow slits above it
+  const onFace = (a, z0, z1) => {
+    const x = 36 + 15 * Math.cos(rad(a)), y = 12 + 15 * Math.sin(rad(a));
+    return [[x, y, z0], [x, y, z1]].map((p) => P(...p));
+  };
+  for (const [a, z0, z1, cls] of [[60, 10, 24, "nf"], [52, 10, 22, "nf lo"], [68, 10, 22, "nf lo"], [38, 34, 42, "nf lo"], [82, 34, 42, "nf lo"]]) {
+    const [p0, p1] = onFace(a, z0, z1);
+    mk("path", { d: seg(p0, p1), class: cls }, g);
+  }
+  const crown = disc(36, 12, 18, 2);
+  const crownS = solid(g);
+  put(crownS, prism(P, front, crown[0], crown[1], 58, 66));
+  // the crown's merlons: short blocks round its rim, back to front
+  const merl = [0, 45, 90, 135, 180, 225, 270, 315].map((a) => [36 + 15 * Math.cos(rad(a)), 12 + 15 * Math.sin(rad(a))]).sort((a, b) => a[0] + a[1] - b[0] - b[1]);
+  for (const [x, y] of merl) { const [mr, mi] = rings(x - 2.6, y - 2.6, x + 2.6, y + 2.6, 1.2, 0.6); put(solid(g), prism(P, front, mr, mi, 66, 70)); }
+
+  // three pads, each with its number in dots on the plate in front of it, and a turret
+  const turrets = PADS.map(([cx, cy], i) => {
+    const grp = mk("g", {}, g);
+    const [r0, r1] = rings(cx - PAD, cy - PAD, cx + PAD, cy + PAD, 4, 1);
+    put(solid(grp), prism(P, front, r0, r1, 0, 1.6));
+    const dots = [];
+    for (let k = 0; k <= i; k++) {
+      const d = flatDot(grp, C, 1.2, "dot off");
+      place(d, P(cx - 3.5 * i + 7 * k, cy + PAD + 5, 0));
+      dots.push(d);
+    }
+    const base = solid(grp), drum = solid(grp), barrel = solid(grp), cap = solid(grp);
+    return { cx, cy, i, base, drum, barrel, cap, dots, h: tween(REST[i]), a: tween(AIM_REST[i]) };
+  });
+
+  function draw(t, h, a) {
+    const z0 = 1.6, z1 = z0 + 3 + h, z2 = z1 + 7;
+    const [b0, b1] = disc(t.cx, t.cy, 8, 1.2, 10);
+    put(t.base, prism(P, front, b0, b1, z0, z1));
+    const [d0, d1] = disc(t.cx, t.cy, 5.6, 1, 10);
+    put(t.drum, prism(P, front, d0, d1, z1, z2));
+    const bar = rrect(0, -1.6, 15, 1.6, 1.4, 3), bin = rrect(0.6, -1, 14.4, 1, 0.8, 3);
+    put(t.barrel, prism(P, front, turned(bar, t.cx, t.cy, a), turned(bin, t.cx, t.cy, a), z1 + 2.2, z1 + 5.4));
+    const [c0, c1] = disc(t.cx, t.cy, 3.4, 0.8, 8);
+    put(t.cap, prism(P, front, c0, c1, z2, z2 + 1.6));
+  }
+
+  const B = register(stage, (_dt, now) => {
+    let moving = false;
+    for (const t of turrets) { draw(t, tval(t.h, now), tval(t.a, now)); if (!tdone(t.h, now) || !tdone(t.a, now)) moving = true; }
+    return moving;
+  });
+  bag.add(B.unregister);
+
+  // hit test: the pads' rest centres on screen, which never move (rule 01)
+  const centres = PADS.map(([cx, cy]) => P(cx, cy, 0));
+  function hit([x, y]) {
+    let best = -1, bd = 1e9;
+    centres.forEach((c, i) => { const d = Math.abs(x - c[0]); if (d < bd && y > c[1] - 90 && y < c[1] + 26) { bd = d; best = i; } });
+    return bd < 34 ? best : -1;
+  }
+
+  let act = -2;
+  function setActive(a) {
+    if (a === act) return;
+    const now = performance.now(), from = a >= 0 ? a : Math.max(act, 1);
+    act = a;
+    turrets.forEach((t, i) => {
+      const delay = Math.abs(i - from) * 45;
+      tset(t.h, a < 0 ? REST[i] : i === a ? lift : LOW, now, delay);
+      tset(t.a, a < 0 ? AIM_REST[i] : i === a ? AIM[i] : AIM_REST[i] - 20, now, delay);
+      const on = i === a;
+      [t.base, t.drum, t.barrel, t.cap].forEach((s) => s.sil.classList.toggle("hi", on));
+      t.dots.forEach((d) => d.setAttribute("class", "dot " + (on ? "" : a < 0 ? "off" : "m")));
+    });
+    crownS.sil.classList.toggle("hi", a < 0);
+    read.textContent = a < 0 ? "rest" : "pad " + (a + 1);
+    B.wake();
+  }
+  setActive(-1);
+
+  bag.add(pointer(stage, { move: (p) => setActive(hit(p)), leave: () => setActive(-1) }));
+  bag.add(() => svg.replaceChildren());
+
+  return {
+    set: (v) => { lift = clamp(v, 6, 28); if (act >= 0) { const a = act; act = -2; setActive(a); } },
+    destroy: bag.dispose,
+  };
+}
+
+hairline({
+  name: "keep",
+  means: "A keep with three turret pads: the pad under the pointer raises its turret to the field, and the others sink back.",
+  rules: [1, 2, 4, 5],
+  range: [10, 18, 28],
+  tour: [[150, 210], [262, 262], [205, 235], null],
+  mount,
+});
+
+</script>
+</body></html>
