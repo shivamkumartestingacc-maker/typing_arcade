@@ -1,4 +1,4 @@
-# Typing Arcade
+# Typing Defense
 
 An isometric typing defense drawn with the **hairline** kernel
 ([lucasmarkes/hairline](https://github.com/lucasmarkes/hairline), MIT).
